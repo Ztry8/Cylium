@@ -255,6 +255,21 @@ impl Interpreter {
         }
     }
 
+    pub fn split_string(string: &mut Types, pattern: &str) -> Result<(), ()> {
+        if let Types::String(source) = string {
+            *string = Types::Vector(
+                source
+                    .split(pattern)
+                    .map(Types::create)
+                    .collect(),
+            );
+
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
     pub fn run(&mut self) {
         let mut line_number = 0;
 
@@ -369,16 +384,17 @@ impl Interpreter {
                         if let Some((op, expr)) = tokens.1.split_once(' ') {
                             let expr: &str = expr.trim();
 
+                            assert!(
+                                self.variables.get(tokens.0).unwrap().1 == VariableType::Local,
+                                "{}",
+                                get_error(line_number, &line, errors::A07)
+                            );
+
                             match op.trim() {
                                 "as" => {
-                                    let (value, var_type) =
+                                    let (value, _) =
                                         self.variables.get_mut(tokens.0).unwrap();
 
-                                    assert!(
-                                        *var_type == VariableType::Local,
-                                        "{}",
-                                        get_error(line_number, &line, errors::A07)
-                                    );
 
                                     if let Types::Vector(_) = value {
                                         match expr {
@@ -427,6 +443,19 @@ impl Interpreter {
                                         show_error(line_number, &line, errors::A09)
                                     }
                                 }
+                                "split" => {
+                                    let pattern =
+                                        match tokenize(&self.variables, line_number, &line, expr) {
+                                            Types::String(pattern) => pattern,
+                                            _ => show_error(line_number, &line, errors::A18),
+                                        };
+
+                                    Self::split_string(
+                                        &mut self.variables.get_mut(tokens.0).unwrap().0,
+                                        &pattern,
+                                    )
+                                    .unwrap_or_else(|_| show_error(line_number, &line, errors::A18))
+                                }
                                 _ => show_error(line_number, &line, errors::A06),
                             }
                         } else if let Some((Types::Vector(source), var_type)) =
@@ -437,6 +466,7 @@ impl Interpreter {
                                 "{}",
                                 get_error(line_number, &line, errors::A07)
                             );
+                            
                             match tokens.1.trim() {
                                 "unique" => {
                                     let mut unique = Vec::new();

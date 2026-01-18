@@ -5,6 +5,12 @@
 use crate::{errors, get_error, interpreter::Variable, show_error, types::Types};
 use std::collections::HashMap;
 
+macro_rules! is_string {
+    ($sym:expr) => {
+        $sym.is_alphabetic() || $sym.is_ascii_punctuation() || $sym.is_ascii_whitespace()
+    };
+}
+
 #[derive(PartialEq, Clone)]
 pub enum Token {
     OpenParen,  // (
@@ -159,8 +165,8 @@ pub fn tokenize(
                                 .unwrap_or_else(|_| show_error(line_number, line, errors::A02)),
                         ))
                     }
-                } else if sym.is_alphabetic() {
-                    while i + j < chars.len() && chars[i + j].is_alphabetic() {
+                } else if is_string!(sym) {
+                    while i + j < chars.len() && (is_string!(chars[i + j])) {
                         token.push(chars[i + j]);
                         j += 1;
                     }
