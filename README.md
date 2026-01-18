@@ -40,6 +40,27 @@ This is the official and primary repository of the Cylium programming language.
 It includes the full interpreter source code and all development-related resources.    
 Documentation and tutorials are available on the [official website](https://cylium.site).
 
+### Compilation from Source
+
+You can compile Cylium yourself from source by following these steps:    
+(Precompiled binaries are also available for download [here](https://cylium.site/))
+
+1. **Install Rust**  
+   Follow the instructions at [https://rustup.rs](https://rustup.rs) to install Rust and Cargo.
+
+2. **Clone the repository**  
+   ```
+   git clone https://github.com/ztry8/cylium.git
+   cd cylium/interpreter
+   ```
+   
+3. **Build the release version**  
+   ```
+   cargo build --release
+   ```
+
+After building, the compiled binary will be available in `target/release/`
+
 ### [Contributing](https://github.com/Ztry8/Cylium?tab=contributing-ov-file)
 
 ### [License](https://github.com/Ztry8/Cylium?tab=Apache-2.0-1-ov-file)
