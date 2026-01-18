@@ -17,7 +17,7 @@ fn get_error(line_number: usize, line: &str, error: &str) -> String {
         line,
         "Error ".red(),
         error.red(),
-        "For details, visit: https://cylium.site/docs/errors".cyan(),
+        "For details, visit: https://cylium.site/materials/errors".cyan(),
     )
 }
 
@@ -32,7 +32,7 @@ fn show_warning(line_number: usize, line: &str, warning: &str) {
         line,
         "Warning ".yellow(),
         warning.yellow(),
-        "For details, visit: https://cylium.site/docs/errors".cyan(),
+        "For details, visit: https://cylium.site/materials/errors".cyan(),
     )
 }
 

@@ -3,6 +3,7 @@
 * [ ] Improve the standard library
   * [ ] String functions
   * [ ] Vector functions
+  * [ ] Random functions
   * [ ] File functions
 * [ ] Add support for community libraries
 * [ ] Integration with other languages

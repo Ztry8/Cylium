@@ -5,3 +5,4 @@ interpreter/**/*.rs.bk
 interpreter/*.pdb
 
 interpreter/**/mutants.out*/
+interpreter/Cargo.lock

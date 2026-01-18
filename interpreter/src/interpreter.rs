@@ -24,7 +24,7 @@ impl Interpreter {
         let mut labels = HashMap::new();
 
         for (number, line) in file.iter().enumerate() {
-            if let Some(label) = line.strip_suffix(':') {
+            if let Some(label) = line.trim().strip_suffix(':') {
                 labels.insert(label.to_owned(), number - 1);
             }
         }
@@ -32,21 +32,21 @@ impl Interpreter {
         let mut variables = HashMap::new();
 
         variables.insert(
-            "pi".to_owned(),
+            "PI".to_owned(),
             (Types::Float(std::f32::consts::PI), VariableType::Const),
         );
         variables.insert(
-            "e".to_owned(),
+            "E".to_owned(),
             (Types::Float(std::f32::consts::E), VariableType::Const),
         );
 
         variables.insert(
-            "sqrt_2".to_owned(),
+            "SQRT_2".to_owned(),
             (Types::Float(std::f32::consts::SQRT_2), VariableType::Const),
         );
 
         variables.insert(
-            "tau".to_owned(),
+            "TAU".to_owned(),
             (Types::Float(std::f32::consts::TAU), VariableType::Const),
         );
 

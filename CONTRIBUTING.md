@@ -15,10 +15,10 @@ You are also welcome to **create new documentation pages or tutorials**.
 - Your work may be published on the official website.  
 
 **Important:**  
-- All contributions of documentation or tutorials must include **author attribution**    
-and be licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).  
+- All contributions of documentation or tutorials must include **author attribution** and be licensed.
 - By submitting new pages or corrections, you agree that     
 they may be publicly published on the Cylium website under this license.
+- All tutorial contributions must specify the language version they were written for.
 
 ## Improving the interpreter itself
 When contributing to the Cylium interpreter,    
