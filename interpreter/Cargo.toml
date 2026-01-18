@@ -7,7 +7,7 @@ description = "Imperative, strongly typed scripting language"
 documentation = "https://cylium.site/docs"
 readme = "README.md"
 homepage = "https://cylium.site/"
-repository = "https://github.com/cylium"
+repository = "https://github.com/ztry8/cylium"
 license = "Apache-2.0"
 keywords = [
   "cylium",
@@ -16,7 +16,6 @@ keywords = [
   "strongly-typed",
   "interpreted",
   "minimalistic",
-  "lightweight",
   "manual-memory"
 ]
 
