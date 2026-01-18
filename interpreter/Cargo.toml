@@ -1,0 +1,32 @@
+[package]
+name = "cylium"
+version = "0.1.0"
+authors = ["Ztry8 (AslanD)"] 
+edition = "2024"
+description = "Imperative, strongly typed scripting language"
+documentation = "https://cylium.site/docs"
+readme = "README.md"
+homepage = "https://cylium.site/"
+repository = "https://github.com/cylium"
+license = "Apache-2.0"
+keywords = [
+  "cylium",
+  "scripting-language",
+  "imperative",
+  "strongly-typed",
+  "interpreted",
+  "minimalistic",
+  "lightweight",
+  "manual-memory"
+]
+
+[dependencies]
+colored = "*"
+
+[profile.release]
+strip = true
+debug = false
+opt-level = "z"
+panic = "abort"
+lto = true
+codegen-units = 1
