@@ -37,7 +37,7 @@ exit 0
 ### Read More
 
 This is the official and primary repository of the Cylium programming language.    
-It includes the full interpreter source code and all development-related resources.
+It includes the full interpreter source code and all development-related resources.    
 Documentation and tutorials are available on the [official website](https://cylium.site).
 
 ### [Contributing](https://github.com/Ztry8/Cylium?tab=contributing-ov-file)
