@@ -1,0 +1,53 @@
+name: Build Rust Interpreter
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - run: |
+          rustup target add x86_64-unknown-linux-musl
+          rustup target add x86_64-pc-windows-gnu
+
+      - run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      - run: |
+          cd interpreter
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      - run: |
+          cd interpreter
+          cargo build --release --target x86_64-pc-windows-gnu
+
+      - run: |
+          mkdir -p artifacts
+          LINUX_BIN=interpreter/target/x86_64-unknown-linux-musl/release/cylium
+          if [ -f "$LINUX_BIN" ]; then
+            sha256sum "$LINUX_BIN" > artifacts/linux_musl.sha256
+          fi
+          WIN_BIN=interpreter/target/x86_64-pc-windows-gnu/release/cylium.exe
+          if [ -f "$WIN_BIN" ]; then
+            sha256sum "$WIN_BIN" > artifacts/windows_gnu.sha256
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: interpreter-builds
+          path: |
+            interpreter/target/x86_64-unknown-linux-musl/release/cylium
+            interpreter/target/x86_64-pc-windows-gnu/release/cylium.exe
+            artifacts/linux_musl.sha256
+            artifacts/windows_gnu.sha256

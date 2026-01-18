@@ -1,0 +1,7 @@
+interpreter/debug
+interpreter/target
+
+interpreter/**/*.rs.bk
+interpreter/*.pdb
+
+interpreter/**/mutants.out*/
