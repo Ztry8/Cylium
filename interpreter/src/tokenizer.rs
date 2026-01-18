@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 macro_rules! is_string {
     ($sym:expr) => {
-        $sym.is_alphabetic() || $sym.is_ascii_punctuation() || $sym.is_ascii_whitespace()
+        $sym.is_alphabetic() || $sym.is_ascii_punctuation()
     };
 }
 
@@ -165,6 +165,15 @@ pub fn tokenize(
                                 .unwrap_or_else(|_| show_error(line_number, line, errors::A02)),
                         ))
                     }
+                } else if sym == '\"' {
+                    j = 1;
+                    while i + j < chars.len() && chars[i + j] != '\"' {
+                        token.push(chars[i + j]);
+                        j += 1;
+                    }
+
+                    i += j;
+                    Token::Value(Types::String(token.to_owned()))
                 } else if is_string!(sym) {
                     while i + j < chars.len() && (is_string!(chars[i + j])) {
                         token.push(chars[i + j]);

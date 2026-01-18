@@ -58,43 +58,53 @@ impl Interpreter {
     }
 
     fn echo(&self, line_number: usize, line: &str, expr: &str) {
+        let expr = expr
+            .strip_prefix("\"")
+            .unwrap_or_else(|| show_error(line_number, line, errors::A15))
+            .strip_suffix("\"")
+            .unwrap_or_else(|| show_error(line_number, line, errors::A15));
+
         if expr.contains('{') && expr.contains('}') {
-            let text = expr.chars().collect::<Vec<char>>();
+            for line in expr.split("\\n") {
+                let text = line.chars().collect::<Vec<char>>();
 
-            let mut variable = false;
-            let mut expr = String::new();
+                let mut variable = false;
+                let mut expr = String::new();
 
-            for (i, sym) in text.iter().enumerate() {
-                if !(*sym != '{' || i != 0 && text[i - 1] == '\\') {
-                    assert!(!variable, "{}", get_error(line_number, line, errors::A10));
-                    variable = true;
-                    continue;
-                } else if *sym == '}' && i != 0 && text[i - 1] != '\\' {
-                    variable = false;
+                for (i, sym) in text.iter().enumerate() {
+                    if !(*sym != '{' || i != 0 && text[i - 1] == '\\') {
+                        assert!(!variable, "{}", get_error(line_number, line, errors::A10));
+                        variable = true;
+                        continue;
+                    } else if *sym == '}' && i != 0 && text[i - 1] != '\\' {
+                        variable = false;
 
-                    print!(
-                        "{}",
-                        if let Some((Types::Vector(_), _)) = self.variables.get(&expr) {
-                            self.variables.get(&expr).unwrap().0.clone()
-                        } else {
-                            tokenize(&self.variables, line_number, line, &expr)
-                        }
-                    );
+                        print!(
+                            "{}",
+                            if let Some((Types::Vector(_), _)) = self.variables.get(&expr) {
+                                self.variables.get(&expr).unwrap().0.clone()
+                            } else {
+                                tokenize(&self.variables, line_number, line, &expr)
+                            }
+                        );
 
-                    expr.clear();
-                    continue;
+                        expr.clear();
+                        continue;
+                    }
+
+                    if variable {
+                        expr.push(*sym);
+                    } else {
+                        print!("{}", sym);
+                    }
                 }
 
-                if variable {
-                    expr.push(*sym);
-                } else {
-                    print!("{}", sym);
-                }
+                println!();
             }
-
-            println!();
         } else {
-            println!("{}", expr)
+            for line in expr.split("\\n") {
+                println!("{}", line);
+            }
         }
     }
 
@@ -239,7 +249,13 @@ impl Interpreter {
 
         if *var_type != VariableType::Const {
             assert!(
-                discriminant(value) == discriminant(&second),
+                discriminant(value) == discriminant(&second)
+                    || (op == "*="
+                        && matches!(
+                            (&value, &second),
+                            (Types::String(_), Types::Number(_))
+                                | (Types::Number(_), Types::String(_))
+                        )),
                 "{}",
                 get_error(line_number, line, errors::A14),
             );
@@ -250,6 +266,7 @@ impl Interpreter {
                 "*=" => *value *= second,
                 "+=" => *value += second,
                 "-=" => *value -= second,
+                "=" => *value = second,
                 _ => show_error(line_number, line, errors::A06),
             }
         }
@@ -257,12 +274,7 @@ impl Interpreter {
 
     pub fn split_string(string: &mut Types, pattern: &str) -> Result<(), ()> {
         if let Types::String(source) = string {
-            *string = Types::Vector(
-                source
-                    .split(pattern)
-                    .map(Types::create)
-                    .collect(),
-            );
+            *string = Types::Vector(source.split(pattern).map(Types::create).collect());
 
             Ok(())
         } else {
@@ -392,9 +404,7 @@ impl Interpreter {
 
                             match op.trim() {
                                 "as" => {
-                                    let (value, _) =
-                                        self.variables.get_mut(tokens.0).unwrap();
-
+                                    let (value, _) = self.variables.get_mut(tokens.0).unwrap();
 
                                     if let Types::Vector(_) = value {
                                         match expr {
@@ -424,6 +434,7 @@ impl Interpreter {
                                 "*=" => self.do_math(line_number, &line, tokens.0, expr, "*="),
                                 "+=" => self.do_math(line_number, &line, tokens.0, expr, "+="),
                                 "-=" => self.do_math(line_number, &line, tokens.0, expr, "-="),
+                                "=" => self.do_math(line_number, &line, tokens.0, expr, "="),
                                 "push" => {
                                     let value = tokenize(&self.variables, line_number, &line, expr);
                                     if let Types::Vector(source) =
@@ -466,7 +477,7 @@ impl Interpreter {
                                 "{}",
                                 get_error(line_number, &line, errors::A07)
                             );
-                            
+
                             match tokens.1.trim() {
                                 "unique" => {
                                     let mut unique = Vec::new();
