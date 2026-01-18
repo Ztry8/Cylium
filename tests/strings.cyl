@@ -1,0 +1,10 @@
+var first = Киррилица
+first as vector
+
+var second = 汉语
+second as vector
+
+echo {first}
+echo {second}
+
+exit 0

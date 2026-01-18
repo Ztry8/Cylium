@@ -173,7 +173,7 @@ impl Interpreter {
             if action.trim().starts_with("echo") {
                 self.echo(
                     *line_number,
-                    &line,
+                    line,
                     action
                         .trim()
                         .split_once(" ")

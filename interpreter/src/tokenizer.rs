@@ -117,12 +117,6 @@ pub fn tokenize(
     line: &str,
     expr: &str,
 ) -> Types {
-    assert!(
-        expr.is_ascii(),
-        "{}",
-        get_error(line_number, line, errors::A15)
-    );
-
     let mut tokens = Vec::new();
     let chars = expr.chars().collect::<Vec<char>>();
     let mut i = 0;
@@ -165,8 +159,8 @@ pub fn tokenize(
                                 .unwrap_or_else(|_| show_error(line_number, line, errors::A02)),
                         ))
                     }
-                } else if sym.is_ascii_alphabetic() {
-                    while i + j < chars.len() && chars[i + j].is_ascii_alphabetic() {
+                } else if sym.is_alphabetic() {
+                    while i + j < chars.len() && chars[i + j].is_alphabetic() {
                         token.push(chars[i + j]);
                         j += 1;
                     }
@@ -220,7 +214,7 @@ pub fn tokenize(
                         Token::Value(Types::String(token.trim().to_owned()))
                     }
                 } else {
-                    unreachable!()
+                    show_error(line_number, line, errors::A15);
                 }
             }
         });

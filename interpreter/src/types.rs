@@ -109,7 +109,10 @@ impl Types {
 
     pub fn convert_to_vector(&mut self) {
         *self = Self::Vector(match self {
-            Self::String(value) => value.split(",").map(Self::create).collect(),
+            Self::String(value) => value
+                .chars()
+                .map(|sym| Self::create(&sym.to_string()))
+                .collect(),
             _ => panic!(),
         });
     }
