@@ -39,8 +39,8 @@ please **follow the language philosophy** and maintain the general coding style.
   with existing style and design principles of Cylium.
 
 ## Reporting
-Even opening an issue to report a bug or problem is a valuable contribution. If you have an idea or suggestion,    
-that also counts as a contribution and helps the project grow!
+Even opening an issue to report a bug or problem is a valuable contribution.     
+If you have an idea or suggestion, that also counts as a contribution and helps the project grow!
 
 ## Writing applications using Cylium
 Even a small project or a minor feature written in Cylium is a meaningful contribution to our community.  
