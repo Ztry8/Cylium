@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{errors, get_error, interpreter::Variable, show_error, types::Types};
+use crate::{errors, interpreter::Variable, types::Types};
 use std::collections::HashMap;
 
 macro_rules! is_string {
@@ -34,26 +34,23 @@ fn to_token(value: Types) -> Token {
     Token::Value(value)
 }
 
-fn compute(mut tokens: Vec<Token>, line_number: usize, line: &str) -> Token {
-    assert!(
-        !tokens.is_empty(),
-        "{}",
-        get_error(line_number, line, errors::A15)
-    );
+fn compute(mut tokens: Vec<Token>) -> Result<Token, String> {
+    if !tokens.is_empty() {
+        return Err(errors::A15.to_owned());
+    }
 
-    assert!(
-        !(tokens
+    if (tokens
+        .iter()
+        .any(|t| matches!(t, Token::Value(Types::Number(_))))
+        && tokens
             .iter()
-            .any(|t| matches!(t, Token::Value(Types::Number(_))))
-            && tokens
-                .iter()
-                .any(|t| matches!(t, Token::Value(Types::Float(_))))
-            && tokens
-                .iter()
-                .any(|t| matches!(t, Token::Value(Types::String(_))))),
-        "{}",
-        get_error(line_number, line, errors::A14)
-    );
+            .any(|t| matches!(t, Token::Value(Types::Float(_))))
+        && tokens
+            .iter()
+            .any(|t| matches!(t, Token::Value(Types::String(_)))))
+    {
+        return Err(errors::A14.to_owned());
+    }
 
     while let Some(start) = tokens.iter().position(|t| *t == Token::OpenParen) {
         let mut depth = 1;
@@ -68,10 +65,17 @@ fn compute(mut tokens: Vec<Token>, line_number: usize, line: &str) -> Token {
             end += 1;
         }
 
-        assert!(depth == 0, "{}", get_error(line_number, line, errors::A10));
+        if depth != 0 {
+            return Err(errors::A14.to_owned());
+        }
+
         let expr = tokens.drain(start + 1..end - 1).collect();
 
-        tokens[start] = compute(expr, line_number, line);
+        tokens[start] = match compute(expr) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+
         tokens.remove(start + 1);
     }
 
@@ -114,15 +118,10 @@ fn compute(mut tokens: Vec<Token>, line_number: usize, line: &str) -> Token {
         }
     }
 
-    tokens[0].clone()
+    Ok(tokens[0].clone())
 }
 
-pub fn tokenize(
-    variables: &HashMap<String, Variable>,
-    line_number: usize,
-    line: &str,
-    expr: &str,
-) -> Types {
+pub fn tokenize(variables: &HashMap<String, Variable>, expr: &str) -> Result<Types, String> {
     let mut tokens = Vec::new();
     let chars = expr.chars().collect::<Vec<char>>();
     let mut i = 0;
@@ -159,11 +158,7 @@ pub fn tokenize(
                     if let Ok(value) = token.parse::<i32>() {
                         Token::Value(Types::Number(value))
                     } else {
-                        Token::Value(Types::Float(
-                            token
-                                .parse::<f32>()
-                                .unwrap_or_else(|_| show_error(line_number, line, errors::A02)),
-                        ))
+                        Token::Value(Types::Float(token.parse::<f32>().map_err(|_| errors::A02)?))
                     }
                 } else if sym == '\"' {
                     j = 1;
@@ -203,7 +198,7 @@ pub fn tokenize(
                                     Types::String(value) => {
                                         Token::Value(Types::String(value.clone()))
                                     }
-                                    _ => show_error(line_number, line, errors::A16),
+                                    _ => return Err(errors::A16.to_owned()),
                                 }
                             } else if let Some((Types::Number(index), _)) = variables.get(&index) {
                                 let index = *index as usize;
@@ -213,14 +208,14 @@ pub fn tokenize(
                                     Types::String(value) => {
                                         Token::Value(Types::String(value.clone()))
                                     }
-                                    _ => show_error(line_number, line, errors::A16),
+                                    _ => return Err(errors::A16.to_owned()),
                                 }
                             } else if index == "length" {
                                 Token::Value(Types::Number(source.len() as i32))
                             } else if index == "capacity" {
                                 Token::Value(Types::Number(source.capacity() as i32))
                             } else {
-                                show_error(line_number, line, errors::A17)
+                                return Err(errors::A17.to_owned());
                             }
                         } else {
                             Token::Value(value.clone())
@@ -229,7 +224,7 @@ pub fn tokenize(
                         Token::Value(Types::String(token.trim().to_owned()))
                     }
                 } else {
-                    show_error(line_number, line, errors::A15);
+                    return Err(errors::A15.to_owned());
                 }
             }
         });
@@ -237,8 +232,9 @@ pub fn tokenize(
         i += 1;
     }
 
-    match compute(tokens, line_number, line) {
-        Token::Value(value) => value,
+    match compute(tokens) {
+        Ok(Token::Value(value)) => Ok(value),
+        Err(e) => Err(e),
         _ => unreachable!(),
     }
 }

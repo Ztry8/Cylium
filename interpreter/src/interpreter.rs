@@ -57,12 +57,12 @@ impl Interpreter {
         }
     }
 
-    fn echo(&self, line_number: usize, line: &str, expr: &str) {
+    fn echo(&self, expr: &str) -> Result<(), String> {
         let expr = expr
             .strip_prefix("\"")
-            .unwrap_or_else(|| show_error(line_number, line, errors::A15))
+            .ok_or(errors::A15)?
             .strip_suffix("\"")
-            .unwrap_or_else(|| show_error(line_number, line, errors::A15));
+            .ok_or(errors::A15)?;
 
         if expr.contains('{') && expr.contains('}') {
             for line in expr.split("\\n") {
@@ -73,7 +73,10 @@ impl Interpreter {
 
                 for (i, sym) in text.iter().enumerate() {
                     if !(*sym != '{' || i != 0 && text[i - 1] == '\\') {
-                        assert!(!variable, "{}", get_error(line_number, line, errors::A10));
+                        if variable {
+                            return Err(errors::A10.to_owned());
+                        }
+
                         variable = true;
                         continue;
                     } else if *sym == '}' && i != 0 && text[i - 1] != '\\' {
@@ -84,7 +87,7 @@ impl Interpreter {
                             if let Some((Types::Vector(_), _)) = self.variables.get(&expr) {
                                 self.variables.get(&expr).unwrap().0.clone()
                             } else {
-                                tokenize(&self.variables, line_number, line, &expr)
+                                tokenize(&self.variables, &expr).map_err(|e| e)?
                             }
                         );
 
@@ -106,29 +109,28 @@ impl Interpreter {
                 println!("{}", line);
             }
         }
+
+        Ok(())
     }
 
-    fn goto(&self, line_number: usize, line: &str, dest: &str) -> usize {
-        dest.parse::<usize>().unwrap_or_else(|_| {
-            *self
-                .labels
-                .get(dest.trim())
-                .unwrap_or_else(|| show_error(line_number, line, errors::A11))
-        })
+    fn goto(&self, dest: &str) -> Result<usize, String> {
+        if let Ok(line) = dest.parse::<usize>() {
+            return Ok(line);
+        } else {
+            Ok(self.labels.get(dest.trim()).cloned().ok_or(errors::A11)?)
+        }
     }
 
-    fn compare(&self, line_number: usize, line: &str, expr: &str, op: &str) -> Option<bool> {
+    fn compare(&self, expr: &str, op: &str) -> Result<Option<bool>, String> {
         if let Some((first, second)) = expr.split_once(op) {
-            let first = tokenize(&self.variables, line_number, line, first);
-            let second = tokenize(&self.variables, line_number, line, second);
+            let first = tokenize(&self.variables, first).map_err(|e| e)?;
+            let second = tokenize(&self.variables, second).map_err(|e| e)?;
 
-            assert!(
-                discriminant(&first) == discriminant(&second),
-                "{}",
-                get_error(line_number, line, errors::A14),
-            );
+            if discriminant(&first) != discriminant(&second) {
+                return Err(errors::A14.to_owned());
+            }
 
-            Some(match op {
+            Ok(Some(match op {
                 ">=" => first >= second,
                 "<=" => first <= second,
                 ">" => first > second,
@@ -136,16 +138,14 @@ impl Interpreter {
                 "==" => first == second,
                 "!=" => first != second,
                 _ => unreachable!(),
-            })
+            }))
         } else {
-            None
+            Ok(None)
         }
     }
 
-    fn condition(&self, token: &str, line_number: &mut usize, line: &str) {
-        let (condition, action) = token
-            .split_once("then")
-            .unwrap_or_else(|| show_error(*line_number, line, errors::A12));
+    fn condition(&self, token: &str, line_number: &mut usize) -> Result<(), String> {
+        let (condition, action) = token.split_once("then").ok_or(errors::A12)?;
 
         let check = |mut expr: &str| {
             expr = expr.trim();
@@ -156,43 +156,47 @@ impl Interpreter {
             }
 
             let ops = [">=", "<=", "<", ">", "==", "!="];
+            let mut result = None;
 
-            let result = ops
-                .iter()
-                .find_map(|op| self.compare(*line_number, line, expr, op))
-                .unwrap_or_else(|| {
+            for op in &ops {
+                match self.compare(expr, op) {
+                    Ok(Some(value)) => {
+                        result = Some(value);
+                        break;
+                    }
+                    Ok(None) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+
+            let result = match result {
+                Some(v) => v,
+                None => {
                     if let Types::Boolean(value) = self.parse_value(expr) {
                         value
                     } else {
-                        show_error(*line_number, line, errors::A13);
+                        return Err(errors::A13.to_owned());
                     }
-                });
+                }
+            };
 
-            if not { !result } else { result }
+            if not { Ok(!result) } else { Ok(result) }
         };
 
         let condition_true = if let Some((first, second)) = condition.split_once("and") {
-            check(first) && check(second)
+            check(first).map_err(|e| e)? && check(second).map_err(|e| e)?
         } else if let Some((first, second)) = condition.split_once("or") {
-            check(first) || check(second)
+            check(first).map_err(|e| e)? || check(second).map_err(|e| e)?
         } else {
-            check(condition)
+            check(condition).map_err(|e| e)?
         };
 
         if condition_true {
             if action.trim().starts_with("echo") {
-                self.echo(
-                    *line_number,
-                    line,
-                    action
-                        .trim()
-                        .split_once(" ")
-                        .unwrap_or_else(|| show_error(*line_number, line, errors::A01))
-                        .1
-                        .trim(),
-                );
+                self.echo(action.trim().split_once(" ").ok_or(errors::A01)?.1.trim())
             } else {
-                *line_number = self.goto(*line_number, line, action);
+                *line_number = self.goto(action).map_err(|e| e)?;
+                Ok(())
             }
         } else if *line_number != self.file.len() && self.file[*line_number].starts_with("else if")
         {
@@ -205,28 +209,22 @@ impl Interpreter {
                     .1
                     .trim(),
                 line_number,
-                line,
-            );
+            )
         } else if *line_number != self.file.len() && self.file[*line_number].starts_with("else") {
             let action = self.file[*line_number]
                 .split_once(" ")
-                .unwrap_or_else(|| show_error(*line_number, line, errors::A01))
+                .ok_or(errors::A01)?
                 .1
                 .trim();
 
             if action.starts_with("echo") {
-                self.echo(
-                    *line_number,
-                    line,
-                    action
-                        .split_once(" ")
-                        .unwrap_or_else(|| show_error(*line_number, line, errors::A01))
-                        .1
-                        .trim(),
-                );
+                self.echo(action.split_once(" ").ok_or(errors::A01)?.1.trim())
             } else {
-                *line_number = self.goto(*line_number, line, action);
+                *line_number = self.goto(action).map_err(|e| e)?;
+                Ok(())
             }
+        } else {
+            Ok(())
         }
     }
 
@@ -240,25 +238,20 @@ impl Interpreter {
             .0
     }
 
-    fn do_math(&mut self, line_number: usize, line: &str, name: &str, expr: &str, op: &str) {
-        let second = tokenize(&self.variables, line_number, line, expr);
-        let (value, var_type) = self
-            .variables
-            .get_mut(name)
-            .unwrap_or_else(|| show_error(line_number, line, errors::A03));
+    fn do_math(&mut self, name: &str, expr: &str, op: &str) -> Result<(), String> {
+        let second = tokenize(&self.variables, expr).map_err(|e| e)?;
+        let (value, var_type) = self.variables.get_mut(name).ok_or(errors::A03)?;
 
         if *var_type != VariableType::Const {
-            assert!(
-                discriminant(value) == discriminant(&second)
-                    || (op == "*="
-                        && matches!(
-                            (&value, &second),
-                            (Types::String(_), Types::Number(_))
-                                | (Types::Number(_), Types::String(_))
-                        )),
-                "{}",
-                get_error(line_number, line, errors::A14),
-            );
+            if !(discriminant(value) == discriminant(&second)
+                || (op == "*="
+                    && matches!(
+                        (&value, &second),
+                        (Types::String(_), Types::Number(_)) | (Types::Number(_), Types::String(_))
+                    )))
+            {
+                return Err(errors::A14.to_owned());
+            }
 
             match op {
                 "%=" => *value %= second,
@@ -267,15 +260,16 @@ impl Interpreter {
                 "+=" => *value += second,
                 "-=" => *value -= second,
                 "=" => *value = second,
-                _ => show_error(line_number, line, errors::A06),
+                _ => return Err(errors::A06.to_owned()),
             }
         }
+
+        Ok(())
     }
 
     pub fn split_string(string: &mut Types, pattern: &str) -> Result<(), ()> {
         if let Types::String(source) = string {
             *string = Types::Vector(source.split(pattern).map(Types::create).collect());
-
             Ok(())
         } else {
             Err(())
@@ -298,15 +292,23 @@ impl Interpreter {
                 .unwrap_or_else(|| show_error(line_number, &line, errors::A01));
 
             match tokens.0 {
-                "echo" => self.echo(line_number, &line, tokens.1),
+                "echo" => self
+                    .echo(tokens.1)
+                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
                 "exit" => std::process::exit(
                     tokens
                         .1
                         .parse::<i32>()
                         .unwrap_or_else(|_| show_error(line_number, &line, errors::A02)),
                 ),
-                "goto" => line_number = self.goto(line_number, &line, tokens.1),
-                "if" => self.condition(tokens.1, &mut line_number, &line),
+                "goto" => {
+                    line_number = self
+                        .goto(tokens.1)
+                        .unwrap_or_else(|e| show_error(line_number, &line, &e))
+                }
+                "if" => self
+                    .condition(tokens.1, &mut line_number)
+                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
                 "delete" => {
                     self.variables
                         .remove(tokens.1.trim())
@@ -381,7 +383,8 @@ impl Interpreter {
                         self.variables.insert(
                             name.trim().to_owned(),
                             (
-                                tokenize(&self.variables, line_number, &line, value),
+                                tokenize(&self.variables, value)
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
                                 var_type,
                             ),
                         );
@@ -429,14 +432,27 @@ impl Interpreter {
                                         };
                                     }
                                 }
-                                "%=" => self.do_math(line_number, &line, tokens.0, expr, "%="),
-                                "/=" => self.do_math(line_number, &line, tokens.0, expr, "/="),
-                                "*=" => self.do_math(line_number, &line, tokens.0, expr, "*="),
-                                "+=" => self.do_math(line_number, &line, tokens.0, expr, "+="),
-                                "-=" => self.do_math(line_number, &line, tokens.0, expr, "-="),
-                                "=" => self.do_math(line_number, &line, tokens.0, expr, "="),
+                                "%=" => self
+                                    .do_math(tokens.0, expr, "%=")
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "/=" => self
+                                    .do_math(tokens.0, expr, "/=")
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "*=" => self
+                                    .do_math(tokens.0, expr, "*=")
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "+=" => self
+                                    .do_math(tokens.0, expr, "+=")
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "-=" => self
+                                    .do_math(tokens.0, expr, "-=")
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "=" => self
+                                    .do_math(tokens.0, expr, "=")
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
                                 "push" => {
-                                    let value = tokenize(&self.variables, line_number, &line, expr);
+                                    let value = tokenize(&self.variables, expr)
+                                        .unwrap_or_else(|e| show_error(line_number, &line, &e));
                                     if let Types::Vector(source) =
                                         &mut self.variables.get_mut(tokens.0).unwrap().0
                                     {
@@ -455,11 +471,12 @@ impl Interpreter {
                                     }
                                 }
                                 "split" => {
-                                    let pattern =
-                                        match tokenize(&self.variables, line_number, &line, expr) {
-                                            Types::String(pattern) => pattern,
-                                            _ => show_error(line_number, &line, errors::A18),
-                                        };
+                                    let pattern = match tokenize(&self.variables, expr)
+                                        .unwrap_or_else(|e| show_error(line_number, &line, &e))
+                                    {
+                                        Types::String(pattern) => pattern,
+                                        _ => show_error(line_number, &line, errors::A18),
+                                    };
 
                                     Self::split_string(
                                         &mut self.variables.get_mut(tokens.0).unwrap().0,
@@ -512,7 +529,9 @@ impl Interpreter {
                         let op: &str = op.trim();
                         let expr: &str = expr.trim();
 
-                        let result = tokenize(&self.variables, line_number, &line, expr);
+                        let result = tokenize(&self.variables, expr)
+                            .unwrap_or_else(|e| show_error(line_number, &line, &e));
+
                         let (value, var_type) = self
                             .variables
                             .get_mut(&tokens.0[..start])
