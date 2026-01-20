@@ -87,7 +87,7 @@ impl Interpreter {
                             if let Some((Types::Vector(_), _)) = self.variables.get(&expr) {
                                 self.variables.get(&expr).unwrap().0.clone()
                             } else {
-                                tokenize(&self.variables, &expr).map_err(|e| e)?
+                                tokenize(&self.variables, &expr)?
                             }
                         );
 
@@ -115,7 +115,7 @@ impl Interpreter {
 
     fn goto(&self, dest: &str) -> Result<usize, String> {
         if let Ok(line) = dest.parse::<usize>() {
-            return Ok(line);
+            Ok(line)
         } else {
             Ok(self.labels.get(dest.trim()).cloned().ok_or(errors::A11)?)
         }
@@ -123,8 +123,8 @@ impl Interpreter {
 
     fn compare(&self, expr: &str, op: &str) -> Result<Option<bool>, String> {
         if let Some((first, second)) = expr.split_once(op) {
-            let first = tokenize(&self.variables, first).map_err(|e| e)?;
-            let second = tokenize(&self.variables, second).map_err(|e| e)?;
+            let first = tokenize(&self.variables, first)?;
+            let second = tokenize(&self.variables, second)?;
 
             if discriminant(&first) != discriminant(&second) {
                 return Err(errors::A14.to_owned());
@@ -184,18 +184,18 @@ impl Interpreter {
         };
 
         let condition_true = if let Some((first, second)) = condition.split_once("and") {
-            check(first).map_err(|e| e)? && check(second).map_err(|e| e)?
+            check(first)? && check(second)?
         } else if let Some((first, second)) = condition.split_once("or") {
-            check(first).map_err(|e| e)? || check(second).map_err(|e| e)?
+            check(first)? || check(second)?
         } else {
-            check(condition).map_err(|e| e)?
+            check(condition)?
         };
 
         if condition_true {
             if action.trim().starts_with("echo") {
                 self.echo(action.trim().split_once(" ").ok_or(errors::A01)?.1.trim())
             } else {
-                *line_number = self.goto(action).map_err(|e| e)?;
+                *line_number = self.goto(action)?;
                 Ok(())
             }
         } else if *line_number != self.file.len() && self.file[*line_number].starts_with("else if")
@@ -220,7 +220,7 @@ impl Interpreter {
             if action.starts_with("echo") {
                 self.echo(action.split_once(" ").ok_or(errors::A01)?.1.trim())
             } else {
-                *line_number = self.goto(action).map_err(|e| e)?;
+                *line_number = self.goto(action)?;
                 Ok(())
             }
         } else {
@@ -239,7 +239,7 @@ impl Interpreter {
     }
 
     fn do_math(&mut self, name: &str, expr: &str, op: &str) -> Result<(), String> {
-        let second = tokenize(&self.variables, expr).map_err(|e| e)?;
+        let second = tokenize(&self.variables, expr)?;
         let (value, var_type) = self.variables.get_mut(name).ok_or(errors::A03)?;
 
         if *var_type != VariableType::Const {

@@ -39,7 +39,7 @@ fn compute(mut tokens: Vec<Token>) -> Result<Token, String> {
         return Err(errors::A15.to_owned());
     }
 
-    if (tokens
+    if tokens
         .iter()
         .any(|t| matches!(t, Token::Value(Types::Number(_))))
         && tokens
@@ -47,7 +47,7 @@ fn compute(mut tokens: Vec<Token>) -> Result<Token, String> {
             .any(|t| matches!(t, Token::Value(Types::Float(_))))
         && tokens
             .iter()
-            .any(|t| matches!(t, Token::Value(Types::String(_)))))
+            .any(|t| matches!(t, Token::Value(Types::String(_))))
     {
         return Err(errors::A14.to_owned());
     }
@@ -71,11 +71,7 @@ fn compute(mut tokens: Vec<Token>) -> Result<Token, String> {
 
         let expr = tokens.drain(start + 1..end - 1).collect();
 
-        tokens[start] = match compute(expr) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
-
+        tokens[start] = compute(expr)?;
         tokens.remove(start + 1);
     }
 
