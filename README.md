@@ -27,7 +27,7 @@ Explicit memory management is available when needed, without unnecessary boilerp
 var name = input
 
 # printing on stdout
-echo Hello, {name}!
+echo "Hello, {name}!"
 
 # exit the program gracefully
 delete name
@@ -42,8 +42,8 @@ Documentation and tutorials are available on the [official website](https://cyli
 
 ### Compilation from Source
 
-You can compile Cylium yourself from source by following these steps:    
-(Precompiled binaries are also available for download [here](https://cylium.site/))
+You can compile the latest version of **Cylium** from source by following the steps below.  
+*(Precompiled binaries for stable releases are also available for download [here](https://cylium.site/)).*
 
 1. **Install Rust**  
    Follow the instructions at [https://rustup.rs](https://rustup.rs) to install Rust and Cargo.
