@@ -35,7 +35,7 @@ fn to_token(value: Types) -> Token {
 }
 
 fn compute(mut tokens: Vec<Token>) -> Result<Token, String> {
-    if !tokens.is_empty() {
+    if tokens.is_empty() {
         return Err(errors::A15.to_owned());
     }
 
