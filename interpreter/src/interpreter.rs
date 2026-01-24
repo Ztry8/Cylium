@@ -17,6 +17,7 @@ pub struct Interpreter {
     variables: HashMap<String, Variable>,
     labels: HashMap<String, usize>,
     file: Vec<String>,
+    do_condition: bool,
 }
 
 impl Interpreter {
@@ -51,6 +52,7 @@ impl Interpreter {
         );
 
         Self {
+            do_condition: false,
             variables,
             labels,
             file,
@@ -144,8 +146,8 @@ impl Interpreter {
         }
     }
 
-    fn condition(&self, token: &str, line_number: &mut usize) -> Result<(), String> {
-        let (condition, action) = token.split_once("then").ok_or(errors::A12)?;
+    fn condition(&self, token: &str, line_number: &mut usize) -> Result<bool, String> {
+        let (condition, _) = token.split_once("then").ok_or(errors::A12)?;
 
         let check = |mut expr: &str| {
             expr = expr.trim();
@@ -192,39 +194,27 @@ impl Interpreter {
         };
 
         if condition_true {
-            if action.trim().starts_with("echo") {
-                self.echo(action.trim().split_once(" ").ok_or(errors::A01)?.1.trim())
-            } else {
-                *line_number = self.goto(action)?;
-                Ok(())
-            }
-        } else if *line_number != self.file.len() && self.file[*line_number].starts_with("else if")
-        {
-            *line_number += 1;
-
-            self.condition(
-                self.file[*line_number - 1]
-                    .split_once("if")
-                    .unwrap()
-                    .1
-                    .trim(),
-                line_number,
-            )
-        } else if *line_number != self.file.len() && self.file[*line_number].starts_with("else") {
-            let action = self.file[*line_number]
-                .split_once(" ")
-                .ok_or(errors::A01)?
-                .1
-                .trim();
-
-            if action.starts_with("echo") {
-                self.echo(action.split_once(" ").ok_or(errors::A01)?.1.trim())
-            } else {
-                *line_number = self.goto(action)?;
-                Ok(())
-            }
+            Ok(true)
         } else {
-            Ok(())
+            if self.file[*line_number - 1].starts_with("else") {
+                *line_number += 1;
+            }
+
+            while !self.file[*line_number - 1].starts_with("else")
+                && !self.file[*line_number - 1].starts_with("endif")
+            {
+                *line_number += 1;
+            }
+
+            if self.file[*line_number - 1].starts_with("endif")
+                || !self.file[*line_number - 1].contains("if")
+            {
+                return Ok(false);
+            } else if let Some((_, token)) = self.file[*line_number - 1].split_once("if") {
+                self.condition(token.trim(), line_number)
+            } else {
+                Err(errors::A13.to_owned())
+            }
         }
     }
 
@@ -283,7 +273,11 @@ impl Interpreter {
             let line = self.file[line_number].trim().to_owned();
             line_number += 1;
 
-            if line.starts_with('#') || line.is_empty() || line.ends_with(':') {
+            if line.starts_with('#')
+                || line.is_empty()
+                || line.ends_with(':')
+                || line == "endif"
+            {
                 continue;
             }
 
@@ -306,9 +300,11 @@ impl Interpreter {
                         .goto(tokens.1)
                         .unwrap_or_else(|e| show_error(line_number, &line, &e))
                 }
-                "if" => self
-                    .condition(tokens.1, &mut line_number)
-                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                "if" => {
+                    self.do_condition = self
+                        .condition(tokens.1, &mut line_number)
+                        .unwrap_or_else(|e| show_error(line_number, &line, &e))
+                }
                 "delete" => {
                     self.variables
                         .remove(tokens.1.trim())
@@ -392,6 +388,12 @@ impl Interpreter {
                 }
                 _ => {
                     if tokens.0.starts_with("else") {
+                        if self.do_condition {
+                            while !self.file[line_number - 1].starts_with("endif") {
+                                line_number += 1;
+                            }
+                        }
+
                         continue;
                     }
 

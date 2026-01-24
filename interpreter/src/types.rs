@@ -124,7 +124,7 @@ impl Types {
                 .for_each(|member| member.convert_to_number(line_number, line));
         } else {
             *self = Self::Number(match self {
-                Self::String(value) => dbg!(value).parse::<i32>().unwrap(),
+                Self::String(value) => value.parse::<i32>().unwrap(),
                 Self::Boolean(value) => {
                     if *value {
                         1

@@ -12,9 +12,7 @@ mod types;
 fn get_error(line_number: usize, line: &str, error: &str) -> String {
     format!(
         "{}|{}\nError {}\nFor details, visit: https://cylium.site/materials/errors",
-        line_number,
-        line,
-        error,
+        line_number, line, error,
     )
 }
 
@@ -25,9 +23,7 @@ fn show_error(line_number: usize, line: &str, error: &str) -> ! {
 fn show_warning(line_number: usize, line: &str, warning: &str) {
     println!(
         "{}|{}\nWarning {}\nFor details, visit: https://cylium.site/materials/errors",
-        line_number,
-        line,
-        warning,
+        line_number, line, warning,
     )
 }
 
@@ -90,8 +86,6 @@ fn main() {
             },
         }
     } else {
-        println!(
-            "Error: Expected 1 argument. Type 'help' for assistance"
-        );
+        println!("Error: Expected 1 argument. Type 'help' for assistance");
     }
 }

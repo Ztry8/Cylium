@@ -16,7 +16,7 @@ pub const A09: &str = "A09: This operator can only be used with vectors.";
 
 pub const A10: &str = "A10: Unclosed bracket.";
 pub const A11: &str = "A11: Requested label does not exist.";
-pub const A12: &str = "A12: Expected 'then' keyword after condition.";
+pub const A12: &str = "A12: Expected 'then' keyword after if-else.";
 
 pub const A13: &str = "A13: Invalid condition.";
 pub const A14: &str = "A14: Expression types do not match.";
