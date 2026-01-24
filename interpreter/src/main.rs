@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use colored::Colorize;
 use interpreter::Interpreter;
 
 mod errors;
@@ -12,12 +11,10 @@ mod types;
 
 fn get_error(line_number: usize, line: &str, error: &str) -> String {
     format!(
-        "{}|{}\n{}{}\n{}",
+        "{}|{}\nError {}\nFor details, visit: https://cylium.site/materials/errors",
         line_number,
         line,
-        "Error ".red(),
-        error.red(),
-        "For details, visit: https://cylium.site/materials/errors".cyan(),
+        error,
     )
 }
 
@@ -27,12 +24,10 @@ fn show_error(line_number: usize, line: &str, error: &str) -> ! {
 
 fn show_warning(line_number: usize, line: &str, warning: &str) {
     println!(
-        "{}|{}\n{}{}\n{}",
+        "{}|{}\nWarning {}\nFor details, visit: https://cylium.site/materials/errors",
         line_number,
         line,
-        "Warning ".yellow(),
-        warning.yellow(),
-        "For details, visit: https://cylium.site/materials/errors".cyan(),
+        warning,
     )
 }
 
@@ -81,7 +76,7 @@ fn main() {
             _ => match std::fs::read_to_string(&file_name) {
                 Ok(file) => {
                     if !file_name.ends_with(".cyl") {
-                        println!("{}", "Warning: File extension must be '.cyl'\n".yellow());
+                        println!("Warning: File extension must be '.cyl'\n");
                     }
 
                     let mut interpreter =
@@ -90,14 +85,13 @@ fn main() {
                     interpreter.run();
                 }
                 Err(_) => {
-                    println!("{}", "Error: Specified file not found.".red());
+                    println!("Error: Specified file not found.");
                 }
             },
         }
     } else {
         println!(
-            "{}",
-            "Error: Expected 1 argument. Type 'help' for assistance".red()
+            "Error: Expected 1 argument. Type 'help' for assistance"
         );
     }
 }

@@ -19,9 +19,6 @@ keywords = [
   "manual-memory"
 ]
 
-[dependencies]
-colored = "*"
-
 [profile.release]
 strip = true
 debug = false

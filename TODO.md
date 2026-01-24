@@ -1,11 +1,15 @@
-## This is a rough plan for the development of the language
+## Cylium Language Development Roadmap
 
+* [ ] Remove `goto` statements
+  * [ ] Support multi-line if-else blocks
+  * [ ] Implement `while`, `for`, and `foreach` loops
+  * [ ] Add `proc` (subroutine) support
 * [ ] Improve the standard library
-  * [ ] String functions
-  * [ ] Vector functions
-  * [ ] Random functions
-  * [ ] File functions
+  * [ ] Add string manipulation functions
+  * [ ] Add vector operations
+  * [ ] Add random number functions
+  * [ ] Add file handling functions
 * [ ] Add support for community libraries
-* [ ] Integration with other languages
-  * [ ] Using Cylium with Rust
-  * [ ] Using Cylium with C++
+* [ ] Enable integration with other languages
+  * [ ] Use Cylium with Rust
+  * [ ] Use Cylium with C++
