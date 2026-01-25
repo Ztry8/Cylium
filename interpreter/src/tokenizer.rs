@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 macro_rules! is_string {
     ($sym:expr) => {
-        $sym.is_alphabetic() || $sym.is_ascii_punctuation()
+        $sym.is_alphabetic() || ($sym.is_ascii_punctuation() && !matches!($sym, '[' | ']'))
     };
 }
 
