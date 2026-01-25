@@ -2,12 +2,8 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use std::{
-    fmt::Display,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign},
-};
-
-use crate::{errors, show_warning};
+use crate::errors;
+use std::fmt::Display;
 
 #[derive(Clone, PartialEq, PartialOrd)]
 pub enum Types {
@@ -42,36 +38,42 @@ impl Types {
         }
     }
 
-    pub fn as_number(&self) -> i32 {
+    pub fn as_number(&self) -> Result<i32, String> {
         match self {
-            Self::Number(value) => *value,
-            _ => panic!(),
+            Self::Number(value) => Ok(*value),
+            _ => Err(errors::A16.to_owned()),
         }
     }
 
-    pub fn as_float(&self) -> f32 {
+    pub fn as_float(&self) -> Result<f32, String> {
         match self {
-            Self::Float(value) => *value,
-            _ => panic!(),
+            Self::Float(value) => Ok(*value),
+            _ => Err(errors::A16.to_owned()),
         }
     }
 
-    pub fn as_string(&self) -> &str {
+    pub fn as_string(&self) -> Result<&str, String> {
         match self {
-            Self::String(value) => value,
-            _ => panic!(),
+            Self::String(value) => Ok(value),
+            _ => Err(errors::A16.to_owned()),
         }
     }
 
-    pub fn convert_to_string(&mut self, line_number: usize, line: &str) {
+    pub fn convert_to_string(&mut self) -> Result<Option<String>, String> {
+        let mut warning = None;
+
         if let Self::Vector(value) = self {
-            value
-                .iter_mut()
-                .for_each(|member| member.convert_to_string(line_number, line));
+            for member in value {
+                let result = member.convert_to_string()?;
+
+                if result.is_some() {
+                    warning = result;
+                }
+            }
         } else {
             *self = Self::String(match self {
                 Self::String(value) => {
-                    show_warning(line_number, line, errors::C01);
+                    warning = Some(errors::C01.to_owned());
                     value.to_owned()
                 }
                 Self::Boolean(value) => {
@@ -86,18 +88,26 @@ impl Types {
                 _ => unreachable!(),
             });
         }
+
+        Ok(warning)
     }
 
-    pub fn convert_to_bool(&mut self, line_number: usize, line: &str) {
+    pub fn convert_to_bool(&mut self) -> Result<Option<String>, String> {
+        let mut warning = None;
+
         if let Self::Vector(value) = self {
-            value
-                .iter_mut()
-                .for_each(|member| member.convert_to_bool(line_number, line));
+            for member in value {
+                let result = member.convert_to_bool()?;
+
+                if result.is_some() {
+                    warning = result;
+                }
+            }
         } else {
             *self = Self::Boolean(match self {
                 Self::String(value) => value.parse::<bool>().unwrap(),
                 Self::Boolean(value) => {
-                    show_warning(line_number, line, errors::C01);
+                    warning = Some(errors::C01.to_owned());
                     *value
                 }
                 Self::Number(value) => *value != 0,
@@ -105,26 +115,42 @@ impl Types {
                 _ => unreachable!(),
             });
         }
+
+        Ok(warning)
     }
 
-    pub fn convert_to_vector(&mut self) {
+    pub fn convert_to_vector(&mut self) -> Result<(), String> {
         *self = Self::Vector(match self {
             Self::String(value) => value
                 .chars()
                 .map(|sym| Self::create(&sym.to_string()))
                 .collect(),
-            _ => panic!(),
+            _ => return Err(errors::A19.to_owned()),
         });
+
+        Ok(())
     }
 
-    pub fn convert_to_number(&mut self, line_number: usize, line: &str) {
+    pub fn convert_to_number(&mut self) -> Result<Option<String>, String> {
+        let mut warning = None;
+
         if let Self::Vector(value) = self {
-            value
-                .iter_mut()
-                .for_each(|member| member.convert_to_number(line_number, line));
+            for member in value {
+                let result = member.convert_to_number()?;
+
+                if result.is_some() {
+                    warning = result;
+                }
+            }
         } else {
             *self = Self::Number(match self {
-                Self::String(value) => value.parse::<i32>().unwrap(),
+                Self::String(value) => {
+                    if let Ok(val) = value.parse::<i32>() {
+                        val
+                    } else {
+                        return Err(errors::A02.to_owned());
+                    }
+                }
                 Self::Boolean(value) => {
                     if *value {
                         1
@@ -133,23 +159,37 @@ impl Types {
                     }
                 }
                 Self::Number(value) => {
-                    show_warning(line_number, line, errors::C01);
+                    warning = Some(errors::C01.to_owned());
                     *value
                 }
                 Self::Float(value) => value.round() as i32,
                 _ => unreachable!(),
             });
         }
+
+        Ok(warning)
     }
 
-    pub fn convert_to_float(&mut self, line_number: usize, line: &str) {
+    pub fn convert_to_float(&mut self) -> Result<Option<String>, String> {
+        let mut warning = None;
+
         if let Self::Vector(value) = self {
-            value
-                .iter_mut()
-                .for_each(|member| member.convert_to_float(line_number, line));
+            for member in value {
+                let result = member.convert_to_number()?;
+
+                if result.is_some() {
+                    warning = result;
+                }
+            }
         } else {
             *self = Self::Float(match self {
-                Self::String(value) => value.parse::<f32>().unwrap(),
+                Self::String(value) => {
+                    if let Ok(val) = value.parse::<f32>() {
+                        val
+                    } else {
+                        return Err(errors::A02.to_owned());
+                    }
+                }
                 Self::Boolean(value) => {
                     if *value {
                         1.0
@@ -159,12 +199,125 @@ impl Types {
                 }
                 Self::Number(value) => *value as f32,
                 Self::Float(value) => {
-                    show_warning(line_number, line, errors::C01);
+                    warning = Some(errors::C01.to_owned());
                     *value
                 }
                 _ => unreachable!(),
             })
         }
+
+        Ok(warning)
+    }
+
+    pub fn rem(self, rhs: Self) -> Result<Self, String> {
+        match self {
+            Self::Number(value) => Ok(Self::Number(value % rhs.as_number()?)),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
+
+    pub fn div(self, rhs: Self) -> Result<Self, String> {
+        match self {
+            Self::Number(value) => Ok(Self::Number(value / rhs.as_number()?)),
+            Self::Float(value) => Ok(Self::Float(value / rhs.as_float()?)),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
+
+    pub fn mul(self, rhs: Self) -> Result<Self, String> {
+        match self {
+            Self::String(value) => {
+                let mut result = String::new();
+
+                for _ in 0..rhs.as_number()? {
+                    result.push_str(&value);
+                }
+
+                Ok(Self::String(result))
+            }
+            Self::Number(value) => Ok(Self::Number(value * rhs.as_number()?)),
+            Self::Float(value) => Ok(Self::Float(value * rhs.as_float()?)),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
+
+    pub fn add(self, rhs: Self) -> Result<Self, String> {
+        match self {
+            Self::String(mut value) => {
+                value.push_str(rhs.as_string()?);
+                Ok(Self::String(value))
+            }
+            Self::Number(value) => Ok(Self::Number(value + rhs.as_number()?)),
+            Self::Float(value) => Ok(Self::Float(value + rhs.as_float()?)),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
+
+    pub fn sub(self, rhs: Self) -> Result<Self, String> {
+        match self {
+            Self::Number(value) => Ok(Self::Number(value - rhs.as_number()?)),
+            Self::Float(value) => Ok(Self::Float(value - rhs.as_float()?)),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
+
+    pub fn rem_assign(&mut self, rhs: Self) -> Result<(), String> {
+        match self {
+            Self::Number(value) => *value %= rhs.as_number()?,
+            _ => return Err(errors::A16.to_owned()),
+        };
+
+        Ok(())
+    }
+
+    pub fn div_assign(&mut self, rhs: Self) -> Result<(), String> {
+        match self {
+            Self::Number(value) => *value /= rhs.as_number()?,
+            Self::Float(value) => *value /= rhs.as_float()?,
+            _ => return Err(errors::A16.to_owned()),
+        };
+
+        Ok(())
+    }
+
+    pub fn mul_assign(&mut self, rhs: Self) -> Result<(), String> {
+        match self {
+            Self::String(value) => {
+                let mut result = String::new();
+
+                for _ in 0..rhs.as_number()? {
+                    result.push_str(value);
+                }
+
+                *value = result;
+            }
+            Self::Number(value) => *value *= rhs.as_number()?,
+            Self::Float(value) => *value *= rhs.as_float()?,
+            _ => return Err(errors::A16.to_owned()),
+        }
+
+        Ok(())
+    }
+
+    pub fn add_assign(&mut self, rhs: Self) -> Result<(), String> {
+        match self {
+            Self::String(value) => value.push_str(rhs.as_string()?),
+            Self::Number(value) => *value += rhs.as_number()?,
+            Self::Float(value) => *value += rhs.as_float()?,
+            _ => return Err(errors::A16.to_owned()),
+        }
+
+        Ok(())
+    }
+
+    pub fn sub_assign(&mut self, rhs: Self) -> Result<(), String> {
+        match self {
+            Self::Number(value) => *value -= rhs.as_number()?,
+            Self::Float(value) => *value -= rhs.as_float()?,
+            _ => return Err(errors::A16.to_owned()),
+        }
+
+        Ok(())
     }
 }
 
@@ -187,136 +340,5 @@ impl Display for Types {
                 }
             }
         )
-    }
-}
-
-impl RemAssign for Types {
-    fn rem_assign(&mut self, rhs: Self) {
-        match self {
-            Self::Number(value) => *value %= rhs.as_number(),
-            _ => panic!(),
-        }
-    }
-}
-
-impl DivAssign for Types {
-    fn div_assign(&mut self, rhs: Self) {
-        match self {
-            Self::Number(value) => *value /= rhs.as_number(),
-            Self::Float(value) => *value /= rhs.as_float(),
-            _ => panic!(),
-        }
-    }
-}
-
-impl MulAssign for Types {
-    fn mul_assign(&mut self, rhs: Self) {
-        match self {
-            Self::String(value) => {
-                let mut result = String::new();
-
-                for _ in 0..rhs.as_number() {
-                    result.push_str(value);
-                }
-
-                *value = result;
-            }
-            Self::Number(value) => *value *= rhs.as_number(),
-            Self::Float(value) => *value *= rhs.as_float(),
-            _ => panic!(),
-        }
-    }
-}
-
-impl AddAssign for Types {
-    fn add_assign(&mut self, rhs: Self) {
-        match self {
-            Self::String(value) => value.push_str(rhs.as_string()),
-            Self::Number(value) => *value += rhs.as_number(),
-            Self::Float(value) => *value += rhs.as_float(),
-            _ => panic!(),
-        }
-    }
-}
-
-impl SubAssign for Types {
-    fn sub_assign(&mut self, rhs: Self) {
-        match self {
-            Self::Number(value) => *value -= rhs.as_number(),
-            Self::Float(value) => *value -= rhs.as_float(),
-            _ => panic!(),
-        }
-    }
-}
-
-impl Rem for Types {
-    type Output = Self;
-
-    fn rem(self, rhs: Self) -> Self::Output {
-        match self {
-            Self::Number(value) => Self::Number(value % rhs.as_number()),
-            _ => panic!(),
-        }
-    }
-}
-
-impl Div for Types {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        match self {
-            Self::Number(value) => Self::Number(value / rhs.as_number()),
-            Self::Float(value) => Self::Float(value / rhs.as_float()),
-            _ => panic!(),
-        }
-    }
-}
-
-impl Mul for Types {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        match self {
-            Self::String(value) => {
-                let mut result = String::new();
-
-                for _ in 0..rhs.as_number() {
-                    result.push_str(&value);
-                }
-
-                Self::String(result)
-            }
-            Self::Number(value) => Self::Number(value * rhs.as_number()),
-            Self::Float(value) => Self::Float(value * rhs.as_float()),
-            _ => panic!(),
-        }
-    }
-}
-
-impl Add for Types {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match self {
-            Self::String(mut value) => {
-                value.push_str(rhs.as_string());
-                Self::String(value)
-            }
-            Self::Number(value) => Self::Number(value + rhs.as_number()),
-            Self::Float(value) => Self::Float(value + rhs.as_float()),
-            _ => panic!(),
-        }
-    }
-}
-
-impl Sub for Types {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        match self {
-            Self::Number(value) => Self::Number(value - rhs.as_number()),
-            Self::Float(value) => Self::Float(value - rhs.as_float()),
-            _ => panic!(),
-        }
     }
 }

@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{errors, get_error, show_error, tokenizer::tokenize, types::Types};
+use crate::{errors, get_error, show_error, show_warning, tokenizer::tokenize, types::Types};
 use std::{collections::HashMap, mem::discriminant};
 
 pub type Variable = (Types, VariableType);
@@ -209,7 +209,7 @@ impl Interpreter {
             if self.file[*line_number - 1].starts_with("endif")
                 || !self.file[*line_number - 1].contains("if")
             {
-                return Ok(false);
+                Ok(false)
             } else if let Some((_, token)) = self.file[*line_number - 1].split_once("if") {
                 self.condition(token.trim(), line_number)
             } else {
@@ -244,11 +244,11 @@ impl Interpreter {
             }
 
             match op {
-                "%=" => *value %= second,
-                "/=" => *value /= second,
-                "*=" => *value *= second,
-                "+=" => *value += second,
-                "-=" => *value -= second,
+                "%=" => value.rem_assign(second)?,
+                "/=" => value.div_assign(second)?,
+                "*=" => value.mul_assign(second)?,
+                "+=" => value.add_assign(second)?,
+                "-=" => value.sub_assign(second)?,
                 "=" => *value = second,
                 _ => return Err(errors::A06.to_owned()),
             }
@@ -273,11 +273,7 @@ impl Interpreter {
             let line = self.file[line_number].trim().to_owned();
             line_number += 1;
 
-            if line.starts_with('#')
-                || line.is_empty()
-                || line.ends_with(':')
-                || line == "endif"
-            {
+            if line.starts_with('#') || line.is_empty() || line.ends_with(':') || line == "endif" {
                 continue;
             }
 
@@ -411,28 +407,32 @@ impl Interpreter {
                                 "as" => {
                                     let (value, _) = self.variables.get_mut(tokens.0).unwrap();
 
-                                    if let Types::Vector(_) = value {
+                                    let result = if let Types::Vector(_) = value {
                                         match expr {
-                                            "numbers" => {
-                                                value.convert_to_number(line_number, &line)
-                                            }
-                                            "strings" => {
-                                                value.convert_to_string(line_number, &line)
-                                            }
-                                            "floats" => value.convert_to_float(line_number, &line),
-                                            "bools" => value.convert_to_bool(line_number, &line),
+                                            "numbers" => value.convert_to_number(),
+                                            "strings" => value.convert_to_string(),
+                                            "floats" => value.convert_to_float(),
+                                            "bools" => value.convert_to_bool(),
                                             _ => show_error(line_number, &line, errors::A08),
-                                        };
+                                        }
                                     } else {
                                         match expr {
-                                            "vector" => value.convert_to_vector(),
-                                            "number" => value.convert_to_number(line_number, &line),
-                                            "string" => value.convert_to_string(line_number, &line),
-                                            "float" => value.convert_to_float(line_number, &line),
-                                            "bool" => value.convert_to_bool(line_number, &line),
+                                            "vector" => value.convert_to_vector().map(|_| None),
+                                            "number" => value.convert_to_number(),
+                                            "string" => value.convert_to_string(),
+                                            "float" => value.convert_to_float(),
+                                            "bool" => value.convert_to_bool(),
                                             _ => show_error(line_number, &line, errors::A08),
-                                        };
-                                    }
+                                        }
+                                    };
+
+                                    match result {
+                                        Ok(Some(warning)) => {
+                                            show_warning(line_number, &line, &warning)
+                                        }
+                                        Err(error) => show_error(line_number, &line, &error),
+                                        Ok(None) => {}
+                                    };
                                 }
                                 "%=" => self
                                     .do_math(tokens.0, expr, "%=")
@@ -558,11 +558,21 @@ impl Interpreter {
 
                             match op {
                                 "=" => source[index] = result,
-                                "%=" => source[index] %= result,
-                                "*=" => source[index] *= result,
-                                "/=" => source[index] /= result,
-                                "+=" => source[index] += result,
-                                "-=" => source[index] -= result,
+                                "%=" => source[index]
+                                    .rem_assign(result)
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "*=" => source[index]
+                                    .mul_assign(result)
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "/=" => source[index]
+                                    .div_assign(result)
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "+=" => source[index]
+                                    .add_assign(result)
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
+                                "-=" => source[index]
+                                    .sub_assign(result)
+                                    .unwrap_or_else(|e| show_error(line_number, &line, &e)),
                                 _ => show_error(line_number, &line, errors::A06),
                             }
                         }

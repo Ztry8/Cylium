@@ -81,15 +81,12 @@ fn compute(mut tokens: Vec<Token>) -> Result<Token, String> {
             .position(|t| matches!(*t, Token::Multiply | Token::Divide | Token::Mod))
         {
             tokens[index] = to_token(match tokens[index] {
-                Token::Multiply => {
-                    get_value(tokens[index - 1].clone()) * get_value(tokens[index + 1].clone())
-                }
-                Token::Divide => {
-                    get_value(tokens[index - 1].clone()) / get_value(tokens[index + 1].clone())
-                }
-                Token::Mod => {
-                    get_value(tokens[index - 1].clone()) % get_value(tokens[index + 1].clone())
-                }
+                Token::Multiply => get_value(tokens[index - 1].clone())
+                    .mul(get_value(tokens[index + 1].clone()))?,
+                Token::Divide => get_value(tokens[index - 1].clone())
+                    .div(get_value(tokens[index + 1].clone()))?,
+                Token::Mod => get_value(tokens[index - 1].clone())
+                    .rem(get_value(tokens[index + 1].clone()))?,
                 _ => unreachable!(),
             });
 
@@ -100,12 +97,10 @@ fn compute(mut tokens: Vec<Token>) -> Result<Token, String> {
             .position(|t| matches!(*t, Token::Plus | Token::Minus))
         {
             tokens[index] = to_token(match tokens[index] {
-                Token::Plus => {
-                    get_value(tokens[index - 1].clone()) + get_value(tokens[index + 1].clone())
-                }
-                Token::Minus => {
-                    get_value(tokens[index - 1].clone()) - get_value(tokens[index + 1].clone())
-                }
+                Token::Plus => get_value(tokens[index - 1].clone())
+                    .add(get_value(tokens[index + 1].clone()))?,
+                Token::Minus => get_value(tokens[index - 1].clone())
+                    .sub(get_value(tokens[index + 1].clone()))?,
                 _ => unreachable!(),
             });
 

@@ -23,8 +23,10 @@ pub const A14: &str = "A14: Expression types do not match.";
 pub const A15: &str = "A15: Invalid expression.";
 
 pub const A16: &str = "A16: Invalid type for arithmetic operation.";
-pub const A17: &str = "A17: Invalid array index.";
+pub const A17: &str = "A17: Invalid vector index.";
 pub const A18: &str = "A18: This operator can only be used with strings.";
+
+pub const A19: &str = "A19: Cannot convert value to vector.";
 
 //
 

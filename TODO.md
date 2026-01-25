@@ -1,7 +1,7 @@
 ## Cylium Language Development Roadmap
 
 * [ ] Remove `goto` statements
-  * [x] Support multi-line if-else blocks
+  * [x] ~~Support multi-line if-else blocks~~
   * [ ] Implement `while`, `for`, and `foreach` loops
   * [ ] Add `proc` (subroutine) support
 * [ ] Improve the standard library
