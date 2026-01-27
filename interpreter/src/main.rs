@@ -3,10 +3,12 @@
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
 use interpreter::Interpreter;
+use parser::Parser;
 
 mod errors;
 mod interpreter;
-mod tokenizer;
+mod lexer;
+mod parser;
 mod types;
 
 fn get_error(line_number: usize, line: &str, error: &str) -> String {
@@ -20,10 +22,10 @@ fn show_error(line_number: usize, line: &str, error: &str) -> ! {
     panic!("{}", get_error(line_number, line, error))
 }
 
-fn show_warning(line_number: usize, line: &str, warning: &str) {
+fn show_warning(warning: &str) {
     println!(
-        "{}|{}\nWarning {}\nFor details, visit: https://cylium.site/materials/errors",
-        line_number, line, warning,
+        "Warning {}\nFor details, visit: https://cylium.site/materials/errors",
+        warning,
     )
 }
 
@@ -75,8 +77,16 @@ fn main() {
                         println!("Warning: File extension must be '.cyl'\n");
                     }
 
-                    let mut interpreter =
-                        Interpreter::new(file.lines().map(String::from).collect());
+                    let file: Vec<String> = file.lines().map(String::from).collect();
+                    let tokens = lexer::tokenize_file(&file);
+
+                    let file: Vec<String> = file
+                        .into_iter()
+                        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                        .collect();
+
+                    let mut parser = Parser::new(file.clone(), tokens);
+                    let interpreter = Interpreter::new(file, &parser.start());
 
                     interpreter.run();
                 }

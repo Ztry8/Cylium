@@ -1,5 +1,0 @@
-var word = "  hello!"
-
-echo "aslan\n{word * 2}"
-
-exit 0

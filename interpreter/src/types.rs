@@ -5,7 +5,7 @@
 use crate::errors;
 use std::fmt::Display;
 
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Types {
     Vector(Vec<Types>),
     String(String),
@@ -16,23 +16,12 @@ pub enum Types {
 
 impl Types {
     pub fn create(value: &str) -> Self {
-        if value.contains('.') {
-            if let Ok(float) = value.parse::<f32>() {
-                Self::Float(float)
-            } else {
-                Self::String(value.to_owned())
-            }
-        } else if let Ok(boolean) = value.parse::<bool>() {
+        if let Ok(boolean) = value.parse::<bool>() {
             Self::Boolean(boolean)
         } else if let Ok(number) = value.parse::<i32>() {
             Self::Number(number)
-        } else if value.contains(',') {
-            Self::Vector(
-                value
-                    .split(',')
-                    .map(|member| Self::create(member.trim()))
-                    .collect(),
-            )
+        } else if let Ok(float) = value.parse::<f32>() {
+            Self::Float(float)
         } else {
             Self::String(value.to_owned())
         }
@@ -259,65 +248,6 @@ impl Types {
             Self::Float(value) => Ok(Self::Float(value - rhs.as_float()?)),
             _ => Err(errors::A16.to_owned()),
         }
-    }
-
-    pub fn rem_assign(&mut self, rhs: Self) -> Result<(), String> {
-        match self {
-            Self::Number(value) => *value %= rhs.as_number()?,
-            _ => return Err(errors::A16.to_owned()),
-        };
-
-        Ok(())
-    }
-
-    pub fn div_assign(&mut self, rhs: Self) -> Result<(), String> {
-        match self {
-            Self::Number(value) => *value /= rhs.as_number()?,
-            Self::Float(value) => *value /= rhs.as_float()?,
-            _ => return Err(errors::A16.to_owned()),
-        };
-
-        Ok(())
-    }
-
-    pub fn mul_assign(&mut self, rhs: Self) -> Result<(), String> {
-        match self {
-            Self::String(value) => {
-                let mut result = String::new();
-
-                for _ in 0..rhs.as_number()? {
-                    result.push_str(value);
-                }
-
-                *value = result;
-            }
-            Self::Number(value) => *value *= rhs.as_number()?,
-            Self::Float(value) => *value *= rhs.as_float()?,
-            _ => return Err(errors::A16.to_owned()),
-        }
-
-        Ok(())
-    }
-
-    pub fn add_assign(&mut self, rhs: Self) -> Result<(), String> {
-        match self {
-            Self::String(value) => value.push_str(rhs.as_string()?),
-            Self::Number(value) => *value += rhs.as_number()?,
-            Self::Float(value) => *value += rhs.as_float()?,
-            _ => return Err(errors::A16.to_owned()),
-        }
-
-        Ok(())
-    }
-
-    pub fn sub_assign(&mut self, rhs: Self) -> Result<(), String> {
-        match self {
-            Self::Number(value) => *value -= rhs.as_number()?,
-            Self::Float(value) => *value -= rhs.as_float()?,
-            _ => return Err(errors::A16.to_owned()),
-        }
-
-        Ok(())
     }
 }
 
