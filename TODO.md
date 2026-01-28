@@ -3,7 +3,7 @@
 * [x] Remove `goto` statements
   * [x] Support multi-line if-else blocks
   * [x] Add `proc` (subroutine) support
-  * [ ] Implement `while` `for`, and `foreach` loop
+  * [x] Implement `while` loop
   * [ ] Implement `for` loop
   * [ ] Implement `foreach` loop
 * [ ] Improve the standard library

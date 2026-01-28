@@ -23,15 +23,16 @@ Explicit memory management is available when needed, without unnecessary boilerp
 
 #### Example:
 ```py
-# read input from user
-var name = input
+proc main
+   # read input from user
+   var name = input
 
-# printing on stdout
-echo "Hello, {name}!"
+   # printing on stdout
+   echo "Hello, " + name + "!"
 
-# exit the program gracefully
-delete name
-exit 0
+   # exit the program 
+   exit 0
+end
 ```
 
 ### Read More
