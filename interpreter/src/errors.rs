@@ -32,6 +32,8 @@ pub const A27: &str = "A27: Arguments count do not match.";
 pub const A28: &str = "A28: Cannot delete a constant variable.";
 pub const A29: &str = "A29: Expected variable name to delete.";
 
+pub const A30: &str = "A30: This operator can only be used with vectors.";
+
 //
 
 pub const C01: &str = "C01: Variable is already of the target type.";

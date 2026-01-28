@@ -1,0 +1,6 @@
+proc main 
+    var r = input
+    r = r as float
+
+    echo 2.0 * r * PI
+end

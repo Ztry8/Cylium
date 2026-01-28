@@ -10,8 +10,15 @@ use crate::{
     types::Types,
 };
 
-use std::collections::HashMap;
 use std::io::{self, Write};
+use std::{collections::HashMap, error};
+
+#[derive(Debug)]
+enum VectorIndex {
+    Index(usize),
+    Length,
+    Capacity,
+}
 
 #[derive(Clone)]
 struct Frame {
@@ -83,6 +90,41 @@ impl Interpreter {
         }
     }
 
+    fn get_vector(name: &str) -> Result<(String, VectorIndex), String> {
+        let mut chars: Vec<char> = name.chars().collect();
+        let mut grab_name = true;
+
+        let mut name = String::new();
+        let mut index = String::new();
+
+        if chars.pop() != Some(']') {
+            return Err(errors::A17.to_owned());
+        }
+
+        for i in 0..chars.len() {
+            if chars[i] == '[' {
+                grab_name = false;
+                continue;
+            }
+
+            if grab_name {
+                name.push(chars[i]);
+            } else {
+                index.push(chars[i]);
+            }
+        }
+
+        if let Ok(num) = index.parse::<usize>() {
+            Ok((name, VectorIndex::Index(num)))
+        } else {
+            match index.as_str() {
+                "length" => Ok((name, VectorIndex::Length)),
+                "capacity" => Ok((name, VectorIndex::Capacity)),
+                _ => Err(errors::A17.to_owned()),
+            }
+        }
+    }
+
     pub fn run(&self) {
         let (_, body) = self.procs.get("main").unwrap().clone();
         let mut frame = Frame {
@@ -90,7 +132,7 @@ impl Interpreter {
         };
 
         frame.vars.extend(self.consts.clone());
-        
+
         for stmt in &body {
             if let Err(e) = self.exec(stmt.clone(), &mut frame) {
                 self.handler.show_error(stmt.line, &e);
@@ -133,9 +175,26 @@ impl Interpreter {
 
             AstKind::Assign { name, op, expr } => {
                 let rhs = Self::eval(*expr, frame)?;
-                let (cur, is_const) = frame.vars.get(&name).ok_or(errors::A03)?;
 
-                if *is_const {
+                let (cur, is_const) = if name.contains('[') {
+                    let (name, index) = Self::get_vector(&name)?;
+
+                    if let Some((Types::Vector(vec), is_const)) = frame.vars.get(&name) {
+                        match index {
+                            VectorIndex::Index(index) => (
+                                vec.get(index).ok_or(errors::A17.to_owned()).cloned()?,
+                                *is_const,
+                            ),
+                            _ => return Err(errors::A15.to_owned()),
+                        }
+                    } else {
+                        return Err(errors::A30.to_owned());
+                    }
+                } else {
+                    frame.vars.get(&name).ok_or(errors::A03)?.clone()
+                };
+
+                if is_const {
                     return Err(errors::A07.to_owned());
                 }
 
@@ -159,6 +218,12 @@ impl Interpreter {
             }
 
             AstKind::Exit(code) => std::process::exit(code),
+
+            AstKind::MethodCall {
+                receiver,
+                name,
+                args,
+            } => {}
 
             AstKind::ProcCall { name, args } => {
                 let (params, body) = self.procs.get(&name).ok_or(errors::A24)?.clone();
@@ -231,6 +296,22 @@ impl Interpreter {
                     "number" | "float" | "bool" | "string" | "sqrt" | "cos" | "sin"
                 ) {
                     Ok(Types::String(n))
+                } else if n.as_str() == "vector" {
+                    Ok(Types::Vector(Vec::new()))
+                } else if n.contains('[') {
+                    let (name, index) = Self::get_vector(&n)?;
+
+                    if let Some((Types::Vector(vec), _)) = frame.vars.get(&name) {
+                        match index {
+                            VectorIndex::Index(index) => {
+                                vec.get(index).ok_or(errors::A17.to_owned()).cloned()
+                            }
+                            VectorIndex::Length => Ok(Types::Number(vec.len() as i32)),
+                            VectorIndex::Capacity => Ok(Types::Number(vec.capacity() as i32)),
+                        }
+                    } else {
+                        Err(errors::A30.to_owned())
+                    }
                 } else {
                     Ok(frame.vars.get(&n).cloned().ok_or(errors::A03.to_owned())?.0)
                 }
