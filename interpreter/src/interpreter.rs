@@ -6,8 +6,7 @@ use crate::{
     errors,
     lexer::Token,
     parser::{AstKind, AstNode, ElseBlock},
-    show_error, show_warning,
-    types::Types,
+    types::Types, file_handler::FileHandler,
 };
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -19,11 +18,11 @@ struct Frame {
 
 pub struct Interpreter {
     procs: HashMap<String, (Vec<String>, Vec<AstNode>)>,
-    file: Vec<String>,
+    handler: FileHandler,
 }
 
 impl Interpreter {
-    pub fn new(file: Vec<String>, ast: &[AstNode]) -> Self {
+    pub fn new(handler: FileHandler, ast: &[AstNode]) -> Self {
         let mut procs = HashMap::new();
 
         for node in ast {
@@ -33,10 +32,10 @@ impl Interpreter {
         }
 
         if !procs.contains_key("main") {
-            show_error(0, &file[0], errors::A22);
+            handler.show_error(0, errors::A22);
         }
 
-        Self { file, procs }
+        Self { handler, procs }
     }
 
     pub fn run(&self) {
@@ -47,7 +46,7 @@ impl Interpreter {
 
         for stmt in &body {
             if let Err(e) = self.exec(stmt.clone(), &mut frame) {
-                show_error(stmt.line, &self.file[stmt.line], &e);
+                self.handler.show_error(stmt.line, &e);
             }
         }
     }
@@ -64,7 +63,7 @@ impl Interpreter {
                         io::stdout().flush().unwrap();
                         let mut buf = String::new();
                         if io::stdin().read_line(&mut buf).is_err() {
-                            show_warning(errors::C02);
+                            FileHandler::show_warning(errors::C02);
                         }
 
                         Types::String(buf.trim().to_string())
@@ -126,7 +125,7 @@ impl Interpreter {
 
                 for stmt in body {
                     if let Err(e) = self.exec(stmt.clone(), &mut new_frame) {
-                        show_error(node.line, "", &e);
+                        self.handler.show_error(node.line, &e);
                     }
                 }
             }
@@ -176,7 +175,7 @@ impl Interpreter {
 
             AstKind::UnaryOp { op, expr } => {
                 let v = self.eval(*expr, frame)?;
-                
+
                 match op {
                     Token::Not => Ok(Types::Number((v.as_number()? == 0) as i32)),
                     Token::Minus => Ok(Types::Number(-v.as_number()?)),
@@ -194,22 +193,22 @@ impl Interpreter {
                         match target {
                             "number" => {
                                 if let Some(e) = l.convert_to_number()? {
-                                    show_warning(&e);
+                                    FileHandler::show_warning(&e);
                                 }
                             }
                             "float" => {
                                 if let Some(e) = l.convert_to_float()? {
-                                    show_warning(&e);
+                                    FileHandler::show_warning(&e);
                                 }
                             }
                             "bool" => {
                                 if let Some(e) = l.convert_to_bool()? {
-                                    show_warning(&e);
+                                    FileHandler::show_warning(&e);
                                 }
                             }
                             "string" => {
                                 if let Some(e) = l.convert_to_string()? {
-                                    show_warning(&e);
+                                    FileHandler::show_warning(&e);
                                 }
                             }
                             _ => return Err(errors::A08.to_owned()),

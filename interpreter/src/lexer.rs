@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{errors, show_error, types::Types};
+use crate::{errors, types::Types, file_handler::FileHandler};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -55,19 +55,15 @@ pub enum Token {
     Comma,        // ,
 }
 
-pub fn tokenize_file(file: &[String]) -> Vec<Vec<Token>> {
+pub fn tokenize_file(handler: &FileHandler) -> Vec<Vec<Token>> {
     let mut tokens = Vec::new();
 
-    for (line_number, line) in file.iter().enumerate() {
+    for (line_number, line) in handler.ready_file.iter().enumerate() {
         let line = line.trim();
-
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
 
         tokens.push(match tokenize_line(line) {
             Ok(value) => value,
-            Err(e) => show_error(line_number, line, &e),
+            Err(e) => handler.show_error(line_number, &e),
         });
     }
 

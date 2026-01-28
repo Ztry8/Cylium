@@ -2,32 +2,16 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
+use file_handler::FileHandler;
 use interpreter::Interpreter;
 use parser::Parser;
 
+mod file_handler;
 mod errors;
 mod interpreter;
 mod lexer;
 mod parser;
 mod types;
-
-fn get_error(line_number: usize, line: &str, error: &str) -> String {
-    format!(
-        "{}|{}\nError {}\nFor details, visit: https://cylium.site/materials/errors",
-        line_number, line, error,
-    )
-}
-
-fn show_error(line_number: usize, line: &str, error: &str) -> ! {
-    panic!("{}", get_error(line_number, line, error))
-}
-
-fn show_warning(warning: &str) {
-    println!(
-        "Warning {}\nFor details, visit: https://cylium.site/materials/errors",
-        warning,
-    )
-}
 
 fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
@@ -78,15 +62,14 @@ fn main() {
                     }
 
                     let file: Vec<String> = file.lines().map(String::from).collect();
-                    let tokens = lexer::tokenize_file(&file);
+                    let handler = FileHandler::new(file);
 
-                    let file: Vec<String> = file
-                        .into_iter()
-                        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                        .collect();
+                    let tokens = lexer::tokenize_file(&handler);
 
-                    let mut parser = Parser::new(file.clone(), tokens);
-                    let interpreter = Interpreter::new(file, &parser.start());
+                    let mut parser = Parser::new(tokens);
+                    let ast = parser.start(&handler);
+
+                    let interpreter = Interpreter::new(handler, &ast);
 
                     interpreter.run();
                 }

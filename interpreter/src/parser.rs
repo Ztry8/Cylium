@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{errors, lexer::Token, show_error, types::Types};
+use crate::{errors, lexer::Token, types::Types, file_handler::FileHandler};
 
 macro_rules! node {
     ($line:expr, $kind:expr) => {
@@ -77,28 +77,26 @@ pub enum ElseBlock {
 
 pub struct Parser {
     tokens: Vec<Vec<Token>>,
-    file: Vec<String>,
     line: usize,
     pos: usize,
 }
 
 impl Parser {
-    pub fn new(file: Vec<String>, tokens: Vec<Vec<Token>>) -> Self {
+    pub fn new(tokens: Vec<Vec<Token>>) -> Self {
         Self {
             line: 0,
             pos: 0,
             tokens,
-            file,
         }
     }
 
-    pub fn start(&mut self) -> Vec<AstNode> {
+    pub fn start(&mut self, handler: &FileHandler) -> Vec<AstNode> {
         let mut tree = Vec::new();
 
         while self.line < self.tokens.len() {
             tree.push(
                 self.parse()
-                    .unwrap_or_else(|e| show_error(self.line, &self.file[self.line], &e)),
+                    .unwrap_or_else(|e| handler.show_error(self.line, &e)),
             );
         }
 
