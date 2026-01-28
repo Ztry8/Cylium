@@ -169,7 +169,7 @@ impl Interpreter {
             AstKind::Value(v) => Ok(v),
 
             AstKind::Ident(n) => {
-                if matches!(n.as_str(), "number" | "float" | "bool" | "string") {
+                if matches!(n.as_str(), "number" | "float" | "bool" | "string" | "sqrt" | "cos" | "sin") {
                     Ok(Types::String(n))
                 } else {
                     Ok(frame.vars.get(&n).cloned().ok_or(errors::A03.to_owned())?.0)
@@ -214,8 +214,12 @@ impl Interpreter {
                                     FileHandler::show_warning(&e);
                                 }
                             }
+                            "sqrt" => l.sqrt()?,
+                            "cos" => l.cos()?,
+                            "sin" => l.sin()?,
                             _ => return Err(errors::A08.to_owned()),
                         }
+
                         Ok(l)
                     }
 

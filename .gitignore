@@ -8,3 +8,4 @@ interpreter/**/mutants.out*/
 interpreter/Cargo.lock
 
 .DS_Store
+examples/main.cyl

@@ -1,7 +1,0 @@
-proc main
-    var name = input 
-
-    echo 2 * name
-
-    exit 0
-end

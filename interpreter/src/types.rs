@@ -263,6 +263,33 @@ impl Types {
             _ => Err(errors::A16.to_owned()),
         }
     }
+
+    pub fn sqrt(&mut self) -> Result<(), String> {
+        if let Self::Float(value) = self {
+            *value = value.sqrt();
+            Ok(())
+        } else {
+            Err(errors::A16.to_owned())
+        }
+    }
+
+    pub fn sin(&mut self) -> Result<(), String> {
+        if let Self::Float(value) = self {
+            *value = value.sin();
+            Ok(())
+        } else {
+            Err(errors::A16.to_owned())
+        }
+    }
+
+    pub fn cos(&mut self) -> Result<(), String> {
+        if let Self::Float(value) = self {
+            *value = value.cos();
+            Ok(())
+        } else {
+            Err(errors::A16.to_owned())
+        }
+    }
 }
 
 impl Display for Types {
