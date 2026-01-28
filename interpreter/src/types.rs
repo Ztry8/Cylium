@@ -224,7 +224,21 @@ impl Types {
 
                 Ok(Self::String(result))
             }
-            Self::Number(value) => Ok(Self::Number(value * rhs.as_number()?)),
+            Self::Number(value) => match rhs.as_number() {
+                Ok(num) => Ok(Self::Number(value * num)),
+                Err(_) => match rhs.as_string() {
+                    Ok(string) => {
+                        let mut result = String::new();
+
+                        for _ in 0..value {
+                            result.push_str(string);
+                        }
+
+                        Ok(Self::String(result))
+                    }
+                    Err(e) => Err(e),
+                },
+            },
             Self::Float(value) => Ok(Self::Float(value * rhs.as_float()?)),
             _ => Err(errors::A16.to_owned()),
         }

@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{errors, lexer::Token, types::Types, file_handler::FileHandler};
+use crate::{errors, file_handler::FileHandler, lexer::Token, types::Types};
 
 macro_rules! node {
     ($line:expr, $kind:expr) => {

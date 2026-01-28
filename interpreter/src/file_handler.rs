@@ -6,10 +6,15 @@ pub struct FileHandler {
 impl FileHandler {
     pub fn new(file: Vec<String>) -> Self {
         Self {
-            raw_file: file.clone(),
+            raw_file: file
+                .clone()
+                .into_iter()
+                .map(|line| line.trim().to_owned())
+                .collect(),
             ready_file: file
                 .into_iter()
-                .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+                .map(|line| line.trim().to_owned())
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
                 .collect(),
         }
     }

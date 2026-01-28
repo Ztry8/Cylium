@@ -4,10 +4,12 @@
 
 use crate::{
     errors,
+    file_handler::FileHandler,
     lexer::Token,
     parser::{AstKind, AstNode, ElseBlock},
-    types::Types, file_handler::FileHandler,
+    types::Types,
 };
+
 use std::collections::HashMap;
 use std::io::{self, Write};
 
@@ -97,6 +99,7 @@ impl Interpreter {
 
             AstKind::Echo(expr) => {
                 let v = self.eval(*expr, frame)?;
+
                 println!("{}", v);
             }
 

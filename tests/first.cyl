@@ -1,3 +1,0 @@
-proc main
-    echo "Hello, World!"
-end

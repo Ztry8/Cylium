@@ -6,8 +6,8 @@ use file_handler::FileHandler;
 use interpreter::Interpreter;
 use parser::Parser;
 
-mod file_handler;
 mod errors;
+mod file_handler;
 mod interpreter;
 mod lexer;
 mod parser;
