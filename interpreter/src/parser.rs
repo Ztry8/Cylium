@@ -135,10 +135,7 @@ impl Parser {
         if let Some(Token::Ident(name)) = self.current_token().cloned() {
             self.pos += 1;
 
-            if name.is_empty()
-                || !name.is_ascii()
-                || name.len() > 256
-            {
+            if name.is_empty() || !name.is_ascii() || name.len() > 256 {
                 return Err(errors::A05.to_owned());
             }
 

@@ -54,14 +54,18 @@ impl Interpreter {
 
     fn exec(&self, node: AstNode, frame: &mut Frame) -> Result<(), String> {
         match node.kind {
-            AstKind::VarDecl { name, value, is_const } => {
+            AstKind::VarDecl {
+                name,
+                value,
+                is_const,
+            } => {
                 let v = match *value {
                     AstKind::Ident(ref n) if n == "input" => {
                         io::stdout().flush().unwrap();
                         let mut buf = String::new();
-                        io::stdin()
-                            .read_line(&mut buf)
-                            .map_err(|_| errors::A15.to_owned())?;
+                        if io::stdin().read_line(&mut buf).is_err() {
+                            show_warning(errors::C02);
+                        }
 
                         Types::String(buf.trim().to_string())
                     }
@@ -172,6 +176,7 @@ impl Interpreter {
 
             AstKind::UnaryOp { op, expr } => {
                 let v = self.eval(*expr, frame)?;
+                
                 match op {
                     Token::Not => Ok(Types::Number((v.as_number()? == 0) as i32)),
                     Token::Minus => Ok(Types::Number(-v.as_number()?)),

@@ -1,7 +1,5 @@
 proc main
-    if 2 > 1
-        echo 2
-    endif
-
-    exit 0
+    var name = input
+    echo "Hello, {name}!"
+    exit 0 
 end

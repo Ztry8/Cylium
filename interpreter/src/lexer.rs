@@ -136,7 +136,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                 }
 
                 if i >= chars.len() {
-                    return Err(errors::A10.to_owned());
+                    return Err(errors::A21.to_owned());
                 }
 
                 tokens.push(Token::Value(Types::String(string)))
