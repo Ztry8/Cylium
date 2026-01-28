@@ -29,6 +29,9 @@ pub const A24: &str = "A24: Requested procedure does not exist.";
 pub const A26: &str = "A26: Expected code for exit.";
 pub const A27: &str = "A27: Arguments count do not match.";
 
+pub const A28: &str = "A28: Cannot delete a constant variable.";
+pub const A29: &str = "A29: Expected variable name to delete.";
+
 //
 
 pub const C01: &str = "C01: Variable is already of the target type.";

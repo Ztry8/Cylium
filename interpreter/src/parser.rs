@@ -31,6 +31,7 @@ pub enum AstKind {
         value: Box<AstKind>,
         is_const: bool,
     },
+    Delete(String),
     Echo(Box<AstKind>),
     Exit(i32),
     ProcCall {
@@ -307,6 +308,16 @@ impl Parser {
                     self.line,
                     AstKind::Echo(Box::new(self.parse_value()?))
                 ))
+            }
+            Some(Token::Delete) => {
+                self.pos += 1;
+
+                if let Some(Token::Ident(name)) = self.current_token().cloned() {
+                    self.pos += 1;
+                    Ok(node!(self.line, AstKind::Delete(name)))
+                } else {
+                    Err(errors::A29.to_owned())
+                }
             }
             Some(Token::Exit) => {
                 self.pos += 1;

@@ -20,6 +20,7 @@ struct Frame {
 
 pub struct Interpreter {
     procs: HashMap<String, (Vec<String>, Vec<AstNode>)>,
+    consts: HashMap<String, (Types, bool)>,
     handler: FileHandler,
 }
 
@@ -27,9 +28,47 @@ impl Interpreter {
     pub fn new(handler: FileHandler, ast: &[AstNode]) -> Self {
         let mut procs = HashMap::new();
 
+        let mut consts_frame = Frame {
+            vars: HashMap::new(),
+        };
+
+        consts_frame
+            .vars
+            .insert("PI".to_owned(), (Types::Float(std::f32::consts::PI), true));
+
+        consts_frame.vars.insert(
+            "TAU".to_owned(),
+            (Types::Float(std::f32::consts::TAU), true),
+        );
+
+        consts_frame
+            .vars
+            .insert("E".to_owned(), (Types::Float(std::f32::consts::E), true));
+
+        consts_frame.vars.insert(
+            "SQRT_2".to_owned(),
+            (Types::Float(std::f32::consts::SQRT_2), true),
+        );
+
         for node in ast {
             if let AstKind::Proc { name, args, body } = &node.kind {
                 procs.insert(name.clone(), (args.clone(), body.clone()));
+            } else if let AstKind::VarDecl {
+                name,
+                value,
+                is_const,
+            } = &node.kind
+            {
+                if *is_const {
+                    let value = Self::eval(*value.clone(), &consts_frame)
+                        .unwrap_or_else(|e| handler.show_error(node.line, &e));
+
+                    consts_frame.vars.insert(name.to_string(), (value, true));
+                } else {
+                    handler.show_error(node.line, errors::A20);
+                }
+            } else {
+                handler.show_error(node.line, errors::A20);
             }
         }
 
@@ -37,7 +76,11 @@ impl Interpreter {
             handler.show_error(0, errors::A22);
         }
 
-        Self { handler, procs }
+        Self {
+            handler,
+            consts: consts_frame.vars,
+            procs,
+        }
     }
 
     pub fn run(&self) {
@@ -46,6 +89,8 @@ impl Interpreter {
             vars: HashMap::new(),
         };
 
+        frame.vars.extend(self.consts.clone());
+        
         for stmt in &body {
             if let Err(e) = self.exec(stmt.clone(), &mut frame) {
                 self.handler.show_error(stmt.line, &e);
@@ -70,14 +115,24 @@ impl Interpreter {
 
                         Types::String(buf.trim().to_string())
                     }
-                    _ => self.eval(*value, frame)?,
+                    _ => Self::eval(*value, frame)?,
                 };
 
                 frame.vars.insert(name, (v, is_const));
             }
 
+            AstKind::Delete(name) => {
+                if let Some((_, is_const)) = frame.vars.remove(&name) {
+                    if is_const {
+                        return Err(errors::A28.to_owned());
+                    }
+                } else {
+                    return Err(errors::A03.to_owned());
+                }
+            }
+
             AstKind::Assign { name, op, expr } => {
-                let rhs = self.eval(*expr, frame)?;
+                let rhs = Self::eval(*expr, frame)?;
                 let (cur, is_const) = frame.vars.get(&name).ok_or(errors::A03)?;
 
                 if *is_const {
@@ -98,7 +153,7 @@ impl Interpreter {
             }
 
             AstKind::Echo(expr) => {
-                let v = self.eval(*expr, frame)?;
+                let v = Self::eval(*expr, frame)?;
 
                 println!("{}", v);
             }
@@ -115,6 +170,8 @@ impl Interpreter {
                 let mut new_frame = Frame {
                     vars: HashMap::new(),
                 };
+
+                new_frame.vars.extend(self.consts.clone());
 
                 for (i, p) in params.iter().enumerate() {
                     let val = match &args[i] {
@@ -134,7 +191,7 @@ impl Interpreter {
             }
 
             AstKind::While { expr, body } => {
-                while self.eval(*expr.clone(), frame)?.as_number()? != 0 {
+                while Self::eval(*expr.clone(), frame)?.as_number()? != 0 {
                     for stmt in &body {
                         self.exec(stmt.clone(), frame)?;
                     }
@@ -142,7 +199,7 @@ impl Interpreter {
             }
 
             AstKind::Condition { expr, yes, no } => {
-                if self.eval(*expr, frame)?.as_number()? != 0 {
+                if Self::eval(*expr, frame)?.as_number()? != 0 {
                     for s in yes {
                         self.exec(s, frame)?;
                     }
@@ -164,12 +221,15 @@ impl Interpreter {
         Ok(())
     }
 
-    fn eval(&self, expr: AstKind, frame: &Frame) -> Result<Types, String> {
+    fn eval(expr: AstKind, frame: &Frame) -> Result<Types, String> {
         match expr {
             AstKind::Value(v) => Ok(v),
 
             AstKind::Ident(n) => {
-                if matches!(n.as_str(), "number" | "float" | "bool" | "string" | "sqrt" | "cos" | "sin") {
+                if matches!(
+                    n.as_str(),
+                    "number" | "float" | "bool" | "string" | "sqrt" | "cos" | "sin"
+                ) {
                     Ok(Types::String(n))
                 } else {
                     Ok(frame.vars.get(&n).cloned().ok_or(errors::A03.to_owned())?.0)
@@ -177,7 +237,7 @@ impl Interpreter {
             }
 
             AstKind::UnaryOp { op, expr } => {
-                let v = self.eval(*expr, frame)?;
+                let v = Self::eval(*expr, frame)?;
 
                 match op {
                     Token::Not => Ok(Types::Number((v.as_number()? == 0) as i32)),
@@ -187,8 +247,8 @@ impl Interpreter {
             }
 
             AstKind::BinaryOp { left, op, right } => {
-                let mut l = self.eval(*left, frame)?;
-                let r = self.eval(*right, frame)?;
+                let mut l = Self::eval(*left, frame)?;
+                let r = Self::eval(*right, frame)?;
 
                 match op {
                     Token::As => {
