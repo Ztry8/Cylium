@@ -16,12 +16,14 @@ pub enum Types {
 
 impl Types {
     pub fn create(value: &str) -> Self {
-        if let Ok(boolean) = value.parse::<bool>() {
-            Self::Boolean(boolean)
-        } else if let Ok(number) = value.parse::<i32>() {
+        if let Ok(number) = value.parse::<i32>() {
             Self::Number(number)
         } else if let Ok(float) = value.parse::<f32>() {
             Self::Float(float)
+        } else if value == "true" {
+            Self::Boolean(true)
+        } else if value == "false" {
+            Self::Boolean(false)
         } else {
             Self::String(value.to_owned())
         }
@@ -44,6 +46,13 @@ impl Types {
     pub fn as_string(&self) -> Result<&str, String> {
         match self {
             Self::String(value) => Ok(value),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
+
+    pub fn as_bool(&self) -> Result<bool, String> {
+        match self {
+            Self::Boolean(value) => Ok(*value),
             _ => Err(errors::A16.to_owned()),
         }
     }

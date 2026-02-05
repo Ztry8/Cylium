@@ -90,7 +90,7 @@ impl Interpreter {
         }
     }
 
-    fn get_vector(name: &str) -> Result<(String, VectorIndex), String> {
+    fn get_vector(frame: &Frame, name: &str) -> Result<(String, VectorIndex), String> {
         let mut chars: Vec<char> = name.chars().collect();
         let mut grab_name = true;
 
@@ -120,7 +120,11 @@ impl Interpreter {
             match index.as_str() {
                 "length" => Ok((name, VectorIndex::Length)),
                 "capacity" => Ok((name, VectorIndex::Capacity)),
-                _ => Err(errors::A17.to_owned()),
+                _ => if let Some((Types::Number(index), _)) = frame.vars.get(&index) {
+                    Ok((name, VectorIndex::Index((*index) as usize)))
+                } else {
+                    Err(errors::A17.to_owned())
+                }
             }
         }
     }
@@ -177,7 +181,7 @@ impl Interpreter {
                 let rhs = Self::eval(*expr, frame)?;
 
                 let (cur, is_const) = if name.contains('[') {
-                    let (name, index) = Self::get_vector(&name)?;
+                    let (name, index) = Self::get_vector(frame, &name)?;
 
                     if let Some((Types::Vector(vec), is_const)) = frame.vars.get(&name) {
                         match index {
@@ -299,7 +303,7 @@ impl Interpreter {
                 } else if n.as_str() == "vector" {
                     Ok(Types::Vector(Vec::new()))
                 } else if n.contains('[') {
-                    let (name, index) = Self::get_vector(&n)?;
+                    let (name, index) = Self::get_vector(frame, &n)?;
 
                     if let Some((Types::Vector(vec), _)) = frame.vars.get(&name) {
                         match index {
@@ -321,7 +325,7 @@ impl Interpreter {
                 let v = Self::eval(*expr, frame)?;
 
                 match op {
-                    Token::Not => Ok(Types::Number((v.as_number()? == 0) as i32)),
+                    Token::Not => Ok(Types::Boolean(!v.as_bool()?)),
                     Token::Minus => Ok(Types::Number(-v.as_number()?)),
                     _ => Err(errors::A15.to_owned()),
                 }
