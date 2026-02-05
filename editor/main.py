@@ -4,11 +4,14 @@
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinter import font
+
 import subprocess
 import sys
 import os
 import re
-from tkinter import font
+import threading
+import queue
 
 CONTROL_KEYWORDS = [
     "if", 
@@ -200,8 +203,9 @@ class TextEditor(tk.Tk):
             self.current_file = path
         with open(self.current_file, "w", encoding="utf-8") as f:
             f.write(self.text.get("1.0", "end-1c"))
-        self.update_title()
+        
         self.text.edit_modified(False)
+        self.update_title()
 
     def update_title(self):
         name = os.path.basename(self.current_file) if self.current_file else "Untitled.cyl"
@@ -220,7 +224,7 @@ class TextEditor(tk.Tk):
     def on_text_change(self, event=None):
         self.highlight()
         self.update_linenumbers()
-        self.text.edit_modified(True)
+        self.update_title()
 
     def highlight(self):
         # Remove all tags
@@ -303,15 +307,79 @@ class TextEditor(tk.Tk):
 
     def run_file(self):
         if not self.current_file:
-            messagebox.showwarning("Error", "Cannot save file!")
+            messagebox.showwarning("Error", "Cannot run unsaved file!")
             return
         self.save_file()
-        if sys.platform.startswith("win"):
-            cmd = ["cmd", "/c"] + [".\\cylium.exe", self.current_file] + ["&&", "pause"]
-            subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        else:
-            cmd = ["./cylium", self.current_file] + ["; read -p 'Press Enter to close'"]
-            subprocess.Popen(["bash", "-c", " ".join(cmd)], start_new_session=True)
+
+        run_window = tk.Toplevel(self)
+        run_window.title(f"Run — {os.path.basename(self.current_file)}")
+        run_window.geometry("800x400")
+
+        output_text = tk.Text(run_window, bg="black", fg="white", insertbackground="white")
+        output_text.pack(fill="both", expand=True)
+        output_text.insert("end", "Running...\n")
+        output_text.config(state="disabled")
+
+        input_queue = queue.Queue()
+
+        def write_output(text):
+            output_text.config(state="normal")
+            output_text.insert("end", text)
+            output_text.see("end")
+            output_text.config(state="disabled")
+
+        def on_enter(event):
+            line = input_entry.get()
+            input_entry.delete(0, "end")
+            input_queue.put(line + "\n")
+            write_output(line + "\n")
+            return "break"
+
+        input_entry = tk.Entry(run_window, bg="black", fg="white", insertbackground="white")
+        input_entry.pack(fill="x")
+        input_entry.bind("<Return>", on_enter)
+        input_entry.focus()
+
+        def run_subprocess():
+            exe = ".\\cylium.exe" if sys.platform.startswith("win") else "./cylium"
+
+            try:
+                proc = subprocess.Popen(
+                    [exe, self.current_file],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    bufsize=1
+                )
+            except Exception as e:
+                write_output(f"Failed to start process: {e}\n")
+                return
+
+            def read_output(pipe):
+                for line in iter(pipe.readline, ''):
+                    write_output(line)
+                pipe.close()
+
+            import threading
+            threading.Thread(target=read_output, args=(proc.stdout,), daemon=True).start()
+            threading.Thread(target=read_output, args=(proc.stderr,), daemon=True).start()
+
+            def feed_input():
+                while proc.poll() is None:
+                    try:
+                        line = input_queue.get(timeout=0.1)
+                        proc.stdin.write(line)
+                        proc.stdin.flush()
+                    except queue.Empty:
+                        continue
+
+            threading.Thread(target=feed_input, daemon=True).start()
+
+            proc.wait()
+            write_output(f"\nProcess finished with exit code {proc.returncode}\n")
+
+        threading.Thread(target=run_subprocess, daemon=True).start()
 
 if __name__ == "__main__":
     app = TextEditor()
