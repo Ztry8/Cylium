@@ -1,5 +1,5 @@
 # Cylium Editor
-## Cylium Editor is a lightweight text editor designed specifically for Cylium, 
+## Lightweight text editor designed specifically for Cylium
 
 It featuring syntax highlighting, automatic indentation, and basic file management.    
 It is built with Python and Tkinter, and works on Windows, Linux, and macOS.
@@ -38,9 +38,6 @@ It is built with Python and Tkinter, and works on Windows, Linux, and macOS.
 
 | Action                     | Shortcut                |
 |-----------------------------|------------------------|
-| Increase font               | Ctrl/Cmd + `+`         |
-| Decrease font               | Ctrl/Cmd + `-`         |
-| Reset font                  | Ctrl/Cmd + `0`         |
 | Insert indentation (Tab)    | Tab                    |
 | New line with indentation   | Enter                  |
 | Undo                        | Ctrl/Cmd + Z           |

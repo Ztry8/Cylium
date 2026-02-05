@@ -10,24 +10,33 @@ import os
 import re
 from tkinter import font
 
-KEYWORDS = [
-    "call",
-    "as",
-    "while",
-    "endwhile",
-    "var",
-    "const",
-    "if",
-    "else",
+CONTROL_KEYWORDS = [
+    "if", 
+    "else", 
     "endif",
-    "echo",
-    "exit",
+    "while", 
+    "endwhile",
+    "proc", 
+    "end"
+]
+
+ACTION_KEYWORDS = [
+    "var", 
+    "const", 
+    "call", 
+    "echo", 
+    "exit", 
     "delete",
-    "proc",
-    "end",
-    "and",
-    "or",
-    "not",
+    "input",
+]
+
+BUILTIN_KEYWORDS = [
+    "as", 
+    "and", 
+    "or", 
+    "not", 
+    "true", 
+    "false", 
 ]
 
 DEFAULT_FONT_SIZE = 21
@@ -36,26 +45,30 @@ MAX_FONT_SIZE = 32
 
 THEMES = {
     "light": {
-        "bg": "#fafafa",             
-        "fg": "#2e2e2e",             
-        "keyword": "#0077aa",        
-        "comment": "#6a737d",        
-        "number": "#d14",            
-        "string": "#50a14f",         
-        "linenumber_bg": "#f0f0f0",  
-        "linenumber_fg": "#999999",  
-        "insert": "#2e2e2e"         
+        "bg": "#ffffff",           
+        "fg": "#2b2b2b",          
+        "control": "#1e90ff",       
+        "action": "#ff7f50",        
+        "builtin": "#28a745",     
+        "comment": "#6c757d",       
+        "number": "#d73a49",        
+        "string": "#50a14f",        
+        "linenumber_bg": "#f7f7f7", 
+        "linenumber_fg": "#adb5bd",
+        "insert": "#2b2b2b"        
     },
     "dark": {
-        "bg": "#1e1e2e",             
-        "fg": "#dcdcdc",             
-        "keyword": "#569cd6",        
-        "comment": "#6a9955",        
-        "number": "#b5cea8",         
-        "string": "#ce9178",        
-        "linenumber_bg": "#2e2e3e",  
-        "linenumber_fg": "#858585",  
-        "insert": "#ffffff"          
+        "bg": "#1e1e28",            
+        "fg": "#e0e0e0",            
+        "control": "#569cd6",  
+        "action": "#d78700",        
+        "builtin": "#b5cea8",       
+        "comment": "#6a9955",      
+        "number": "#b5cea8",       
+        "string": "#ce9178",       
+        "linenumber_bg": "#2c2c3c", 
+        "linenumber_fg": "#888888", 
+        "insert": "#ffffff"         
     }
 }
 
@@ -64,9 +77,7 @@ class TextEditor(tk.Tk):
         super().__init__()
 
         self.geometry("1280x720")
-
         self.current_file = None
-
         self.current_theme = "light"
         self.font_size = DEFAULT_FONT_SIZE
 
@@ -94,6 +105,7 @@ class TextEditor(tk.Tk):
         tk.Button(toolbar, text="Black theme", command=lambda: self.set_theme("dark")).pack(side="right")
         tk.Button(toolbar, text="Increase Font", command=self.increase_font).pack(side="right")
         tk.Button(toolbar, text="Decrease Font", command=self.decrease_font).pack(side="right")
+        tk.Button(toolbar, text="About", command=self.show_about).pack(side="right")
 
         main = tk.Frame(self)
         main.pack(fill="both", expand=True)
@@ -119,21 +131,18 @@ class TextEditor(tk.Tk):
         self.text.config(yscrollcommand=scrollbar.set)
 
         self.text.bind("<KeyRelease>", self.on_text_change)
-        self.text.bind("<Button-4>", self.on_text_change) 
+        self.text.bind("<Button-4>", self.on_text_change)
         self.text.bind("<Button-5>", self.on_text_change)
-
-        self.text.bind("<Control-plus>", self.increase_font)
-        self.text.bind("<Control-minus>", self.decrease_font)
-        self.text.bind("<Control-0>", self.reset_font)
-        self.text.bind("<Control-equal>", self.increase_font)
-
-        self.text.bind("<Command-equal>", self.increase_font)
-        self.text.bind("<Command-plus>", self.increase_font)
-        self.text.bind("<Command-minus>", self.decrease_font)
-        self.text.bind("<Command-0>", self.reset_font)
-
         self.text.bind("<Return>", self.handle_enter)
         self.text.bind("<Tab>", self.insert_spaces)
+
+    def show_about(self):
+        messagebox.showinfo(
+            "About",
+            "Cylium Editor\nLightweight text editor designed specifically for Cylium\n\nhttps://cylium.site\n\nCopyright (c) 2026 Ztry8 (AslanD)\nAll rights reserved.\n\n"
+            "License:\n    This software is licensed under the Apache-2.0 License.\n    https://https://apache.org/licenses/\n\n"
+            "Credits:\n    Author: Ztry8 (AslanD)\n    https://cylium.site/contributors"
+        )
 
     def handle_enter(self, event=None):
         line_index = self.text.index("insert").split(".")[0]
@@ -141,7 +150,6 @@ class TextEditor(tk.Tk):
         line_text = self.text.get(line_start, f"{line_index}.end")
 
         indent = re.match(r"[ \t]*", line_text).group(0)
-
         if line_text.strip().endswith(("proc", "if", "while")):
             indent += " " * 4
 
@@ -160,33 +168,24 @@ class TextEditor(tk.Tk):
 
     def _apply_theme(self):
         t = THEMES[self.current_theme]
-        self.text.config(
-            bg=t["bg"],
-            fg=t["fg"],
-            insertbackground=t["insert"]
-        )
-        self.linenumbers.config(
-            bg=t["linenumber_bg"]
-        )
+        self.text.config(bg=t["bg"], fg=t["fg"], insertbackground=t["insert"])
+        self.linenumbers.config(bg=t["linenumber_bg"])
 
     def _configure_tags(self):
-        self.text.tag_configure("keyword")
+        self.text.tag_configure("control")
+        self.text.tag_configure("action")
+        self.text.tag_configure("builtin")
         self.text.tag_configure("comment")
         self.text.tag_configure("number")
         self.text.tag_configure("string")
 
     def open_file(self):
-        path = filedialog.askopenfilename(
-            filetypes=[("Cylium files", "*.cyl")]
-        )
-
+        path = filedialog.askopenfilename(filetypes=[("Cylium files", "*.cyl")])
         if not path:
             return
-
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             self.text.delete("1.0", "end")
             self.text.insert("1.0", f.read())
-
         self.current_file = path
         self.update_title()
         self.highlight()
@@ -195,18 +194,12 @@ class TextEditor(tk.Tk):
 
     def save_file(self):
         if not self.current_file:
-            path = filedialog.asksaveasfilename(
-                defaultextension=".cyl",
-                filetypes=[("Cylium files", "*.cyl")]
-            )
-
+            path = filedialog.asksaveasfilename(defaultextension=".cyl", filetypes=[("Cylium files", "*.cyl")])
             if not path:
                 return
             self.current_file = path
-
         with open(self.current_file, "w", encoding="utf-8") as f:
             f.write(self.text.get("1.0", "end-1c"))
-
         self.update_title()
         self.text.edit_modified(False)
 
@@ -217,17 +210,11 @@ class TextEditor(tk.Tk):
 
     def on_close(self):
         if self.text.edit_modified():
-            answer = messagebox.askyesnocancel(
-                "Unsaved changes",
-                "You have unsaved changes. Save before exit?"
-            )
-
+            answer = messagebox.askyesnocancel("Unsaved changes", "You have unsaved changes. Save before exit?")
             if answer is None:
-                return 
-
+                return
             if answer:
                 self.save_file()
-
         self.destroy()
 
     def on_text_change(self, event=None):
@@ -236,14 +223,15 @@ class TextEditor(tk.Tk):
         self.text.edit_modified(True)
 
     def highlight(self):
-        self.text.tag_remove("keyword", "1.0", "end")
-        self.text.tag_remove("comment", "1.0", "end")
-        self.text.tag_remove("number", "1.0", "end")
-        self.text.tag_remove("string", "1.0", "end")
+        # Remove all tags
+        for tag in ["control", "action", "builtin", "comment", "number", "string"]:
+            self.text.tag_remove(tag, "1.0", "end")
 
         t = THEMES[self.current_theme]
 
-        self.text.tag_configure("keyword", foreground=t["keyword"])
+        self.text.tag_configure("control", foreground=t["control"])
+        self.text.tag_configure("action", foreground=t["action"])
+        self.text.tag_configure("builtin", foreground=t["builtin"])
         self.text.tag_configure("comment", foreground=t["comment"])
         self.text.tag_configure("number", foreground=t["number"])
         self.text.tag_configure("string", foreground=t["string"])
@@ -259,32 +247,26 @@ class TextEditor(tk.Tk):
                 continue
 
             for m in re.finditer(r'"[^"\n]*"', line):
-                self.text.tag_add(
-                    "string",
-                    f"{i}.{m.start()}",
-                    f"{i}.{m.end()}"
-                )
+                self.text.tag_add("string", f"{i}.{m.start()}", f"{i}.{m.end()}")
 
             for m in re.finditer(r"\b\d+(\.\d+)?\b", line):
-                self.text.tag_add(
-                    "number",
-                    f"{i}.{m.start()}",
-                    f"{i}.{m.end()}"
-                )
+                self.text.tag_add("number", f"{i}.{m.start()}", f"{i}.{m.end()}")
 
-            for kw in KEYWORDS:
+            for kw in CONTROL_KEYWORDS:
                 for m in re.finditer(rf"\b{re.escape(kw)}\b", line):
-                    self.text.tag_add(
-                        "keyword",
-                        f"{i}.{m.start()}",
-                        f"{i}.{m.end()}"
-                    )
+                    self.text.tag_add("control", f"{i}.{m.start()}", f"{i}.{m.end()}")
+
+            for kw in ACTION_KEYWORDS:
+                for m in re.finditer(rf"\b{re.escape(kw)}\b", line):
+                    self.text.tag_add("action", f"{i}.{m.start()}", f"{i}.{m.end()}")
+
+            for kw in BUILTIN_KEYWORDS:
+                for m in re.finditer(rf"\b{re.escape(kw)}\b", line):
+                    self.text.tag_add("builtin", f"{i}.{m.start()}", f"{i}.{m.end()}")
 
     def update_linenumbers(self):
         self.linenumbers.delete("all")
-
         t = THEMES[self.current_theme]
-
         i = self.text.index("@0,0")
         while True:
             dline = self.text.dlineinfo(i)
@@ -292,14 +274,7 @@ class TextEditor(tk.Tk):
                 break
             y = dline[1]
             line_number = str(i).split(".")[0]
-            self.linenumbers.create_text(
-                45,
-                y,
-                anchor="ne",
-                text=line_number,
-                fill=t["linenumber_fg"],
-                font=self.editor_font
-            )
+            self.linenumbers.create_text(45, y, anchor="ne", text=line_number, fill=t["linenumber_fg"], font=self.editor_font)
             i = self.text.index(f"{i}+1line")
 
     def _on_scroll(self, *args):
@@ -330,18 +305,13 @@ class TextEditor(tk.Tk):
         if not self.current_file:
             messagebox.showwarning("Error", "Cannot save file!")
             return
-
         self.save_file()
-
         if sys.platform.startswith("win"):
             cmd = ["cmd", "/c"] + [".\\cylium.exe", self.current_file] + ["&&", "pause"]
             subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
         else:
             cmd = ["./cylium", self.current_file] + ["; read -p 'Press Enter to close'"]
-            subprocess.Popen(
-                ["bash", "-c", " ".join(cmd)],
-                start_new_session=True
-            )
+            subprocess.Popen(["bash", "-c", " ".join(cmd)], start_new_session=True)
 
 if __name__ == "__main__":
     app = TextEditor()

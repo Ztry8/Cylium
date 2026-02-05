@@ -9,3 +9,6 @@ interpreter/Cargo.lock
 
 .DS_Store
 examples/main.cyl
+
+editor/*.cyl
+editor/cylium
