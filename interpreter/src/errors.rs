@@ -33,6 +33,10 @@ pub const A28: &str = "A28: Cannot delete a constant variable.";
 pub const A29: &str = "A29: Expected variable name to delete.";
 
 pub const A30: &str = "A30: This operator can only be used with vectors.";
+pub const A31: &str = "A31: For cycle can be used only with number or float type.";
+
+pub const A32: &str = "A32: For cycle counter variable was deleted.";
+pub const A33: &str = "A33: Infinitive loop behavior has found";
 
 //
 

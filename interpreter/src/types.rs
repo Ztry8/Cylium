@@ -299,6 +299,22 @@ impl Types {
             Err(errors::A16.to_owned())
         }
     }
+
+    pub fn is_neg(&self) -> Result<bool, String> {
+        match self {
+            Self::Number(value) => Ok(value.is_negative()),
+            Self::Float(value) => Ok(value.is_sign_negative()),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
+
+    pub fn is_zero(&self) -> Result<bool, String> {
+        match self {
+            Self::Number(value) => Ok(*value == 0),
+            Self::Float(value) => Ok(*value == 0.0),
+            _ => Err(errors::A16.to_owned()),
+        }
+    }
 }
 
 impl Display for Types {

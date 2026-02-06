@@ -10,8 +10,8 @@ use crate::{
     types::Types,
 };
 
+use std::collections::HashMap;
 use std::io::{self, Write};
-use std::{collections::HashMap, error};
 
 #[derive(Debug)]
 enum VectorIndex {
@@ -101,16 +101,16 @@ impl Interpreter {
             return Err(errors::A17.to_owned());
         }
 
-        for i in 0..chars.len() {
-            if chars[i] == '[' {
+        for sym in chars {
+            if sym == '[' {
                 grab_name = false;
                 continue;
             }
 
             if grab_name {
-                name.push(chars[i]);
+                name.push(sym);
             } else {
-                index.push(chars[i]);
+                index.push(sym);
             }
         }
 
@@ -120,10 +120,12 @@ impl Interpreter {
             match index.as_str() {
                 "length" => Ok((name, VectorIndex::Length)),
                 "capacity" => Ok((name, VectorIndex::Capacity)),
-                _ => if let Some((Types::Number(index), _)) = frame.vars.get(&index) {
-                    Ok((name, VectorIndex::Index((*index) as usize)))
-                } else {
-                    Err(errors::A17.to_owned())
+                _ => {
+                    if let Some((Types::Number(index), _)) = frame.vars.get(&index) {
+                        Ok((name, VectorIndex::Index((*index) as usize)))
+                    } else {
+                        Err(errors::A17.to_owned())
+                    }
                 }
             }
         }
@@ -260,15 +262,89 @@ impl Interpreter {
             }
 
             AstKind::While { expr, body } => {
-                while Self::eval(*expr.clone(), frame)?.as_number()? != 0 {
+                while Self::eval(*expr.clone(), frame)?.as_bool()? {
                     for stmt in &body {
                         self.exec(stmt.clone(), frame)?;
                     }
                 }
             }
 
+            AstKind::For {
+                var_name,
+                start,
+                end,
+                step,
+                body,
+            } => {
+                let start = Self::eval(*start, frame)?;
+                let end = Self::eval(*end, frame)?;
+
+                let step = Self::eval(
+                    step.unwrap_or_else(|| {
+                        if matches!(end, Types::Float(_)) {
+                            if start < end {
+                                AstKind::Value(Types::Float(1.0))
+                            } else {
+                                AstKind::Value(Types::Float(-1.0))
+                            }
+                        } else {
+                            if start < end {
+                                AstKind::Value(Types::Number(1))
+                            } else {
+                                AstKind::Value(Types::Number(-1))
+                            }
+                        }
+                    }),
+                    frame,
+                )?;
+
+                if !((matches!(start, Types::Number(_))
+                    && matches!(end, Types::Number(_))
+                    && matches!(step, Types::Number(_)))
+                    || (matches!(start, Types::Float(_))
+                        && matches!(end, Types::Float(_))
+                        && matches!(step, Types::Float(_))))
+                {
+                    return Err(errors::A31.to_owned());
+                }
+
+                if step.is_zero()?
+                    || (start < end && step.is_neg()?)
+                    || (start > end && !step.is_neg()?)
+                {
+                    return Err(errors::A33.to_owned());
+                }
+
+                frame.vars.insert(var_name.clone(), (start.clone(), false));
+
+                loop {
+                    if let Some((counter, _)) = frame.vars.get(&var_name).cloned() {
+                        if if start < end {
+                            counter < end
+                        } else {
+                            counter > end
+                        } {
+                            for stmt in &body {
+                                self.exec(stmt.clone(), frame)?;
+                            }
+
+                            let (var, _) = frame
+                                .vars
+                                .get_mut(&var_name)
+                                .ok_or(errors::A32.to_owned())?;
+                            
+                            *var = counter.add(step.clone())?;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        return Err(errors::A32.to_owned());
+                    }
+                }
+            }
+
             AstKind::Condition { expr, yes, no } => {
-                if Self::eval(*expr, frame)?.as_number()? != 0 {
+                if Self::eval(*expr, frame)?.as_bool()? {
                     for s in yes {
                         self.exec(s, frame)?;
                     }
@@ -374,19 +450,15 @@ impl Interpreter {
                     Token::Divide => l.div(r),
                     Token::Mod => l.rem(r),
 
-                    Token::Equal => Ok(Types::Number((l == r) as i32)),
-                    Token::NotEqual => Ok(Types::Number((l != r) as i32)),
-                    Token::Greater => Ok(Types::Number((l > r) as i32)),
-                    Token::Less => Ok(Types::Number((l < r) as i32)),
-                    Token::GreaterEqual => Ok(Types::Number((l >= r) as i32)),
-                    Token::LessEqual => Ok(Types::Number((l <= r) as i32)),
+                    Token::Equal => Ok(Types::Boolean(l == r)),
+                    Token::NotEqual => Ok(Types::Boolean(l != r)),
+                    Token::Greater => Ok(Types::Boolean(l > r)),
+                    Token::Less => Ok(Types::Boolean(l < r)),
+                    Token::GreaterEqual => Ok(Types::Boolean(l >= r)),
+                    Token::LessEqual => Ok(Types::Boolean(l <= r)),
 
-                    Token::And => Ok(Types::Number(
-                        (l.as_number()? != 0 && r.as_number()? != 0) as i32,
-                    )),
-                    Token::Or => Ok(Types::Number(
-                        (l.as_number()? != 0 || r.as_number()? != 0) as i32,
-                    )),
+                    Token::And => Ok(Types::Boolean(l.as_bool()? && r.as_bool()?)),
+                    Token::Or => Ok(Types::Boolean(l.as_bool()? || r.as_bool()?)),
 
                     _ => Err(errors::A16.to_owned()),
                 }

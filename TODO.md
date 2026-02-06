@@ -11,6 +11,7 @@
   * [ ] Add vector operations
   * [ ] Add random number functions
   * [ ] Add file handling functions
+  * [ ] Add network using functions
 * [ ] Add support for community libraries
 * [ ] Enable integration with other languages
   * [ ] Use Cylium with Rust

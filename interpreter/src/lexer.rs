@@ -13,6 +13,11 @@ pub enum Token {
     As,       // as
     While,    // while
     EndWhile, // endwhile
+    For,      // for
+    From,     // from
+    To,       // to
+    Step,     // step
+    EndFor,   // endfor
     Var,      // var
     Const,    // const
     If,       // if
@@ -22,7 +27,7 @@ pub enum Token {
     Exit,     // exit
     Delete,   // delete
     Proc,     // proc
-    End,
+    End,      // end
 
     Plus,           // +
     Minus,          // -
@@ -172,6 +177,11 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                         "else" => tokens.push(Token::Else),
                         "endif" => tokens.push(Token::EndIf),
                         "endwhile" => tokens.push(Token::EndWhile),
+                        "for" => tokens.push(Token::For),
+                        "from" => tokens.push(Token::From),
+                        "to" => tokens.push(Token::To),
+                        "step" => tokens.push(Token::Step),
+                        "endfor" => tokens.push(Token::EndFor),
                         "echo" => tokens.push(Token::Echo),
                         "exit" => tokens.push(Token::Exit),
                         "delete" => tokens.push(Token::Delete),

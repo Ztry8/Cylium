@@ -68,6 +68,13 @@ pub enum AstKind {
         expr: Box<AstKind>,
         body: Vec<AstNode>,
     },
+    For {
+        var_name: String,
+        start: Box<AstKind>,
+        end: Box<AstKind>,
+        step: Box<Option<AstKind>>,
+        body: Vec<AstNode>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -161,7 +168,10 @@ impl Parser {
         let first = self.parse_expr(0)?;
 
         if self.current_token() != Some(&Token::Comma) {
-            if self.current_token().is_some() {
+            if !matches!(
+                self.current_token(),
+                None | Some(Token::To) | Some(Token::Step)
+            ) {
                 return Err(errors::A15.to_owned());
             }
 
@@ -371,6 +381,60 @@ impl Parser {
                     AstKind::While {
                         expr: Box::new(expr),
                         body,
+                    }
+                ))
+            }
+            Some(Token::For) => {
+                self.pos += 1;
+
+                let name = if let Some(Token::Ident(name)) = self.current_token().cloned() {
+                    if name.is_empty() || !name.is_ascii() || name.len() > 256 {
+                        Err(errors::A05.to_owned())
+                    } else {
+                        Ok(name)
+                    }
+                } else {
+                    Err(errors::A15.to_owned())
+                }?;
+
+                self.pos += 1;
+                if self.current_token() != Some(&Token::From) {
+                    return Err(errors::A15.to_owned());
+                }
+                self.pos += 1;
+
+                let start = self.parse_value()?;
+
+                if self.current_token() != Some(&Token::To) {
+                    return Err(errors::A15.to_owned());
+                }
+                self.pos += 1;
+
+                let end = self.parse_value()?;
+
+                let step = if self.current_token() == Some(&Token::Step) {
+                    self.pos += 1;
+                    Some(self.parse_value()?)
+                } else {
+                    None
+                };
+
+                let mut body = Vec::new();
+
+                self.next_line();
+                while self.current_token().cloned() != Some(Token::EndFor) {
+                    body.push(self.parse_main()?);
+                    self.next_line();
+                }
+
+                Ok(node!(
+                    self.line,
+                    AstKind::For {
+                        var_name: name,
+                        start: Box::new(start),
+                        end: Box::new(end),
+                        step: Box::new(step),
+                        body
                     }
                 ))
             }
