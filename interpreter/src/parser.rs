@@ -334,7 +334,7 @@ impl Parser {
 
                 if let Some(Token::Value(Types::Number(code))) = self.current_token().cloned() {
                     self.pos += 1;
-                    Ok(node!(self.line, AstKind::Exit(code)))
+                    Ok(node!(self.line, AstKind::Exit(code as i32)))
                 } else {
                     Err(errors::A26.to_owned())
                 }

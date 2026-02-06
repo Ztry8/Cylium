@@ -10,15 +10,15 @@ pub enum Types {
     Vector(Vec<Types>),
     String(String),
     Boolean(bool),
-    Number(i32),
-    Float(f32),
+    Number(i64),
+    Float(f64),
 }
 
 impl Types {
     pub fn create(value: &str) -> Self {
-        if let Ok(number) = value.parse::<i32>() {
+        if let Ok(number) = value.parse::<i64>() {
             Self::Number(number)
-        } else if let Ok(float) = value.parse::<f32>() {
+        } else if let Ok(float) = value.parse::<f64>() {
             Self::Float(float)
         } else if value == "true" {
             Self::Boolean(true)
@@ -29,20 +29,23 @@ impl Types {
         }
     }
 
-    pub fn as_number(&self) -> Result<i32, String> {
+    #[inline(always)]
+    pub fn as_number(&self) -> Result<i64, String> {
         match self {
             Self::Number(value) => Ok(*value),
             _ => Err(errors::A16.to_owned()),
         }
     }
 
-    pub fn as_float(&self) -> Result<f32, String> {
+    #[inline(always)]
+    pub fn as_float(&self) -> Result<f64, String> {
         match self {
             Self::Float(value) => Ok(*value),
             _ => Err(errors::A16.to_owned()),
         }
     }
 
+    #[inline(always)]
     pub fn as_string(&self) -> Result<&str, String> {
         match self {
             Self::String(value) => Ok(value),
@@ -50,6 +53,7 @@ impl Types {
         }
     }
 
+    #[inline(always)]
     pub fn as_bool(&self) -> Result<bool, String> {
         match self {
             Self::Boolean(value) => Ok(*value),
@@ -57,6 +61,7 @@ impl Types {
         }
     }
 
+    #[inline(always)]
     pub fn convert_to_string(&mut self) -> Result<Option<String>, String> {
         let mut warning = None;
 
@@ -90,6 +95,7 @@ impl Types {
         Ok(warning)
     }
 
+    #[inline(always)]
     pub fn convert_to_bool(&mut self) -> Result<Option<String>, String> {
         let mut warning = None;
 
@@ -117,6 +123,7 @@ impl Types {
         Ok(warning)
     }
 
+    #[inline(always)]
     pub fn convert_to_vector(&mut self) -> Result<(), String> {
         *self = Self::Vector(match self {
             Self::String(value) => value
@@ -129,6 +136,7 @@ impl Types {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn convert_to_number(&mut self) -> Result<Option<String>, String> {
         let mut warning = None;
 
@@ -143,7 +151,7 @@ impl Types {
         } else {
             *self = Self::Number(match self {
                 Self::String(value) => {
-                    if let Ok(val) = value.parse::<i32>() {
+                    if let Ok(val) = value.parse::<i64>() {
                         val
                     } else {
                         return Err(errors::A02.to_owned());
@@ -160,7 +168,7 @@ impl Types {
                     warning = Some(errors::C01.to_owned());
                     *value
                 }
-                Self::Float(value) => value.round() as i32,
+                Self::Float(value) => value.round() as i64,
                 _ => unreachable!(),
             });
         }
@@ -168,6 +176,7 @@ impl Types {
         Ok(warning)
     }
 
+    #[inline(always)]
     pub fn convert_to_float(&mut self) -> Result<Option<String>, String> {
         let mut warning = None;
 
@@ -182,7 +191,7 @@ impl Types {
         } else {
             *self = Self::Float(match self {
                 Self::String(value) => {
-                    if let Ok(val) = value.parse::<f32>() {
+                    if let Ok(val) = value.parse::<f64>() {
                         val
                     } else {
                         return Err(errors::A02.to_owned());
@@ -195,7 +204,7 @@ impl Types {
                         0.0
                     }
                 }
-                Self::Number(value) => *value as f32,
+                Self::Number(value) => *value as f64,
                 Self::Float(value) => {
                     warning = Some(errors::C01.to_owned());
                     *value
@@ -207,14 +216,16 @@ impl Types {
         Ok(warning)
     }
 
-    pub fn rem(self, rhs: Self) -> Result<Self, String> {
+    #[inline(always)]
+    pub fn rem(&self, rhs: &Self) -> Result<Self, String> {
         match self {
             Self::Number(value) => Ok(Self::Number(value % rhs.as_number()?)),
             _ => Err(errors::A16.to_owned()),
         }
     }
 
-    pub fn div(self, rhs: Self) -> Result<Self, String> {
+    #[inline(always)]
+    pub fn div(&self, rhs: &Self) -> Result<Self, String> {
         match self {
             Self::Number(value) => Ok(Self::Number(value / rhs.as_number()?)),
             Self::Float(value) => Ok(Self::Float(value / rhs.as_float()?)),
@@ -222,7 +233,8 @@ impl Types {
         }
     }
 
-    pub fn mul(self, rhs: Self) -> Result<Self, String> {
+    #[inline(always)]
+    pub fn mul(&self, rhs: &Self) -> Result<Self, String> {
         match self {
             Self::String(value) => {
                 let mut result = String::new();
@@ -239,7 +251,7 @@ impl Types {
                     Ok(string) => {
                         let mut result = String::new();
 
-                        for _ in 0..value {
+                        for _ in 0..*value {
                             result.push_str(string);
                         }
 
@@ -253,7 +265,8 @@ impl Types {
         }
     }
 
-    pub fn add(self, rhs: Self) -> Result<Self, String> {
+    #[inline(always)]
+    pub fn add(self, rhs: &Self) -> Result<Self, String> {
         match self {
             Self::String(mut value) => {
                 value.push_str(rhs.as_string()?);
@@ -265,7 +278,8 @@ impl Types {
         }
     }
 
-    pub fn sub(self, rhs: Self) -> Result<Self, String> {
+    #[inline(always)]
+    pub fn sub(&self, rhs: &Self) -> Result<Self, String> {
         match self {
             Self::Number(value) => Ok(Self::Number(value - rhs.as_number()?)),
             Self::Float(value) => Ok(Self::Float(value - rhs.as_float()?)),
@@ -273,6 +287,7 @@ impl Types {
         }
     }
 
+    #[inline(always)]
     pub fn sqrt(&mut self) -> Result<(), String> {
         if let Self::Float(value) = self {
             *value = value.sqrt();
@@ -282,6 +297,7 @@ impl Types {
         }
     }
 
+    #[inline(always)]
     pub fn sin(&mut self) -> Result<(), String> {
         if let Self::Float(value) = self {
             *value = value.sin();
@@ -291,6 +307,7 @@ impl Types {
         }
     }
 
+    #[inline(always)]
     pub fn cos(&mut self) -> Result<(), String> {
         if let Self::Float(value) = self {
             *value = value.cos();
@@ -300,6 +317,7 @@ impl Types {
         }
     }
 
+    #[inline(always)]
     pub fn is_neg(&self) -> Result<bool, String> {
         match self {
             Self::Number(value) => Ok(value.is_negative()),
@@ -308,6 +326,7 @@ impl Types {
         }
     }
 
+    #[inline(always)]
     pub fn is_zero(&self) -> Result<bool, String> {
         match self {
             Self::Number(value) => Ok(*value == 0),

@@ -7,6 +7,7 @@ use crate::{
     file_handler::FileHandler,
     lexer::Token,
     parser::{AstKind, AstNode, ElseBlock},
+    scope::Scope,
     types::Types,
 };
 
@@ -20,42 +21,35 @@ enum VectorIndex {
     Capacity,
 }
 
-#[derive(Clone)]
-struct Frame {
-    vars: HashMap<String, (Types, bool)>,
-}
-
 pub struct Interpreter {
     procs: HashMap<String, (Vec<String>, Vec<AstNode>)>,
-    consts: HashMap<String, (Types, bool)>,
     handler: FileHandler,
+    consts: Scope,
 }
 
 impl Interpreter {
     pub fn new(handler: FileHandler, ast: &[AstNode]) -> Self {
         let mut procs = HashMap::new();
 
-        let mut consts_frame = Frame {
-            vars: HashMap::new(),
-        };
+        let mut consts_frame = Scope::new();
 
-        consts_frame
-            .vars
-            .insert("PI".to_owned(), (Types::Float(std::f32::consts::PI), true));
+        consts_frame.declare("PI".to_owned(), Types::Float(std::f64::consts::PI), true);
 
-        consts_frame.vars.insert(
-            "TAU".to_owned(),
-            (Types::Float(std::f32::consts::TAU), true),
-        );
+        consts_frame.declare("TAU".to_owned(), Types::Float(std::f64::consts::TAU), true);
 
-        consts_frame
-            .vars
-            .insert("E".to_owned(), (Types::Float(std::f32::consts::E), true));
+        consts_frame.declare("E".to_owned(), Types::Float(std::f64::consts::E), true);
 
-        consts_frame.vars.insert(
+        consts_frame.declare(
             "SQRT_2".to_owned(),
-            (Types::Float(std::f32::consts::SQRT_2), true),
+            Types::Float(std::f64::consts::SQRT_2),
+            true,
         );
+
+        let dummy = Self {
+            procs: HashMap::new(),
+            handler: FileHandler::new(Vec::new()),
+            consts: Scope::new(),
+        };
 
         for node in ast {
             if let AstKind::Proc { name, args, body } = &node.kind {
@@ -67,10 +61,11 @@ impl Interpreter {
             } = &node.kind
             {
                 if *is_const {
-                    let value = Self::eval(*value.clone(), &consts_frame)
+                    let value = dummy
+                        .eval(value, &consts_frame)
                         .unwrap_or_else(|e| handler.show_error(node.line, &e));
 
-                    consts_frame.vars.insert(name.to_string(), (value, true));
+                    consts_frame.declare(name.to_string(), value, true);
                 } else {
                     handler.show_error(node.line, errors::A20);
                 }
@@ -85,12 +80,13 @@ impl Interpreter {
 
         Self {
             handler,
-            consts: consts_frame.vars,
+            consts: consts_frame,
             procs,
         }
     }
 
-    fn get_vector(frame: &Frame, name: &str) -> Result<(String, VectorIndex), String> {
+    #[inline(always)]
+    fn get_vector(&self, scope: &Scope, name: &str) -> Result<(String, VectorIndex), String> {
         let mut chars: Vec<char> = name.chars().collect();
         let mut grab_name = true;
 
@@ -121,7 +117,7 @@ impl Interpreter {
                 "length" => Ok((name, VectorIndex::Length)),
                 "capacity" => Ok((name, VectorIndex::Capacity)),
                 _ => {
-                    if let Some((Types::Number(index), _)) = frame.vars.get(&index) {
+                    if let Some((Types::Number(index), _)) = scope.get(&self.consts, &index) {
                         Ok((name, VectorIndex::Index((*index) as usize)))
                     } else {
                         Err(errors::A17.to_owned())
@@ -132,29 +128,25 @@ impl Interpreter {
     }
 
     pub fn run(&self) {
-        let (_, body) = self.procs.get("main").unwrap().clone();
-        let mut frame = Frame {
-            vars: HashMap::new(),
-        };
+        let (_, body) = self.procs.get("main").unwrap();
+        let mut frame = Scope::new();
 
-        frame.vars.extend(self.consts.clone());
-
-        for stmt in &body {
-            if let Err(e) = self.exec(stmt.clone(), &mut frame) {
+        for stmt in body {
+            if let Err(e) = self.exec(stmt, &mut frame) {
                 self.handler.show_error(stmt.line, &e);
             }
         }
     }
 
-    fn exec(&self, node: AstNode, frame: &mut Frame) -> Result<(), String> {
-        match node.kind {
+    fn exec(&self, node: &AstNode, scope: &mut Scope) -> Result<(), String> {
+        match &node.kind {
             AstKind::VarDecl {
                 name,
                 value,
                 is_const,
             } => {
-                let v = match *value {
-                    AstKind::Ident(ref n) if n == "input" => {
+                let v = match *value.clone() {
+                    AstKind::Ident(n) if n == "input" => {
                         io::stdout().flush().unwrap();
                         let mut buf = String::new();
                         if io::stdin().read_line(&mut buf).is_err() {
@@ -163,14 +155,14 @@ impl Interpreter {
 
                         Types::String(buf.trim().to_string())
                     }
-                    _ => Self::eval(*value, frame)?,
+                    _ => self.eval(value, scope)?,
                 };
 
-                frame.vars.insert(name, (v, is_const));
+                scope.declare(name.to_owned(), v, *is_const);
             }
 
             AstKind::Delete(name) => {
-                if let Some((_, is_const)) = frame.vars.remove(&name) {
+                if let Some((_, is_const)) = scope.remove(name) {
                     if is_const {
                         return Err(errors::A28.to_owned());
                     }
@@ -180,24 +172,24 @@ impl Interpreter {
             }
 
             AstKind::Assign { name, op, expr } => {
-                let rhs = Self::eval(*expr, frame)?;
+                let rhs = self.eval(expr, scope)?;
 
                 let (cur, is_const) = if name.contains('[') {
-                    let (name, index) = Self::get_vector(frame, &name)?;
+                    let (name, index) = self.get_vector(scope, name)?;
 
-                    if let Some((Types::Vector(vec), is_const)) = frame.vars.get(&name) {
+                    if let Some((Types::Vector(vec), is_const)) = scope.get(&self.consts, &name) {
                         match index {
-                            VectorIndex::Index(index) => (
-                                vec.get(index).ok_or(errors::A17.to_owned()).cloned()?,
-                                *is_const,
-                            ),
+                            VectorIndex::Index(index) => {
+                                (vec.get(index).ok_or(errors::A17.to_owned())?, *is_const)
+                            }
                             _ => return Err(errors::A15.to_owned()),
                         }
                     } else {
                         return Err(errors::A30.to_owned());
                     }
                 } else {
-                    frame.vars.get(&name).ok_or(errors::A03)?.clone()
+                    let (value, is_const) = scope.get(&self.consts, name).ok_or(errors::A03)?;
+                    (value, *is_const)
                 };
 
                 if is_const {
@@ -206,24 +198,24 @@ impl Interpreter {
 
                 let new = match op {
                     Token::Assign => rhs,
-                    Token::PlusAssign => cur.clone().add(rhs)?,
-                    Token::MinusAssign => cur.clone().sub(rhs)?,
-                    Token::MultiplyAssign => cur.clone().mul(rhs)?,
-                    Token::DivideAssign => cur.clone().div(rhs)?,
-                    Token::ModAssign => cur.clone().rem(rhs)?,
+                    Token::PlusAssign => cur.clone().add(&rhs)?,
+                    Token::MinusAssign => cur.sub(&rhs)?,
+                    Token::MultiplyAssign => cur.mul(&rhs)?,
+                    Token::DivideAssign => cur.div(&rhs)?,
+                    Token::ModAssign => cur.rem(&rhs)?,
                     _ => return Err(errors::A15.to_owned()),
                 };
 
-                frame.vars.insert(name, (new, false));
+                scope.declare(name.to_owned(), new, false);
             }
 
             AstKind::Echo(expr) => {
-                let v = Self::eval(*expr, frame)?;
+                let v = self.eval(expr, scope)?;
 
                 println!("{}", v);
             }
 
-            AstKind::Exit(code) => std::process::exit(code),
+            AstKind::Exit(code) => std::process::exit(*code),
 
             AstKind::MethodCall {
                 receiver,
@@ -232,39 +224,35 @@ impl Interpreter {
             } => {}
 
             AstKind::ProcCall { name, args } => {
-                let (params, body) = self.procs.get(&name).ok_or(errors::A24)?.clone();
+                let (params, body) = self.procs.get(name).ok_or(errors::A24)?;
 
                 if params.len() != args.len() {
                     return Err(errors::A27.to_owned());
                 }
 
-                let mut new_frame = Frame {
-                    vars: HashMap::new(),
-                };
-
-                new_frame.vars.extend(self.consts.clone());
+                let mut new_scope = Scope::new();
 
                 for (i, p) in params.iter().enumerate() {
                     let val = match &args[i] {
                         Token::Value(v) => v.clone(),
-                        Token::Ident(n) => frame.vars.get(n).cloned().ok_or(errors::A03)?.0,
+                        Token::Ident(n) => scope.get(&self.consts, n).ok_or(errors::A03)?.0.clone(),
                         _ => return Err(errors::A15.to_owned()),
                     };
 
-                    new_frame.vars.insert(p.clone(), (val, false));
+                    new_scope.declare(p.clone(), val.clone(), false);
                 }
 
                 for stmt in body {
-                    if let Err(e) = self.exec(stmt.clone(), &mut new_frame) {
+                    if let Err(e) = self.exec(&stmt, &mut new_scope) {
                         self.handler.show_error(node.line, &e);
                     }
                 }
             }
 
             AstKind::While { expr, body } => {
-                while Self::eval(*expr.clone(), frame)?.as_bool()? {
-                    for stmt in &body {
-                        self.exec(stmt.clone(), frame)?;
+                while self.eval(expr, scope)?.as_bool()? {
+                    for stmt in body {
+                        self.exec(stmt, scope)?;
                     }
                 }
             }
@@ -276,26 +264,24 @@ impl Interpreter {
                 step,
                 body,
             } => {
-                let start = Self::eval(*start, frame)?;
-                let end = Self::eval(*end, frame)?;
+                let start = self.eval(start, scope)?;
+                let end = self.eval(end, scope)?;
 
-                let step = Self::eval(
-                    step.unwrap_or_else(|| {
+                let step = self.eval(
+                    &step.clone().unwrap_or_else(|| {
                         if matches!(end, Types::Float(_)) {
                             if start < end {
                                 AstKind::Value(Types::Float(1.0))
                             } else {
                                 AstKind::Value(Types::Float(-1.0))
                             }
+                        } else if start < end {
+                            AstKind::Value(Types::Number(1))
                         } else {
-                            if start < end {
-                                AstKind::Value(Types::Number(1))
-                            } else {
-                                AstKind::Value(Types::Number(-1))
-                            }
+                            AstKind::Value(Types::Number(-1))
                         }
                     }),
-                    frame,
+                    scope,
                 )?;
 
                 if !((matches!(start, Types::Number(_))
@@ -315,25 +301,22 @@ impl Interpreter {
                     return Err(errors::A33.to_owned());
                 }
 
-                frame.vars.insert(var_name.clone(), (start.clone(), false));
+                scope.declare(var_name.clone(), start.clone(), false);
 
                 loop {
-                    if let Some((counter, _)) = frame.vars.get(&var_name).cloned() {
+                    if let Some((counter, _)) = scope.get(&self.consts, var_name).cloned() {
                         if if start < end {
                             counter < end
                         } else {
                             counter > end
                         } {
-                            for stmt in &body {
-                                self.exec(stmt.clone(), frame)?;
+                            for stmt in body {
+                                self.exec(stmt, scope)?;
                             }
 
-                            let (var, _) = frame
-                                .vars
-                                .get_mut(&var_name)
-                                .ok_or(errors::A32.to_owned())?;
-                            
-                            *var = counter.add(step.clone())?;
+                            let var = scope.get_mut(var_name).ok_or(errors::A32.to_owned())?;
+
+                            *var = counter.add(&step)?;
                         } else {
                             break;
                         }
@@ -344,18 +327,18 @@ impl Interpreter {
             }
 
             AstKind::Condition { expr, yes, no } => {
-                if Self::eval(*expr, frame)?.as_bool()? {
+                if self.eval(expr, scope)?.as_bool()? {
                     for s in yes {
-                        self.exec(s, frame)?;
+                        self.exec(s, scope)?;
                     }
                 } else if let Some(n) = no {
                     match n {
                         ElseBlock::Else(b) => {
                             for s in b {
-                                self.exec(s, frame)?;
+                                self.exec(s, scope)?;
                             }
                         }
-                        ElseBlock::ElseIf(n) => self.exec(*n, frame)?,
+                        ElseBlock::ElseIf(n) => self.exec(n, scope)?,
                     }
                 }
             }
@@ -366,39 +349,43 @@ impl Interpreter {
         Ok(())
     }
 
-    fn eval(expr: AstKind, frame: &Frame) -> Result<Types, String> {
+    fn eval(&self, expr: &AstKind, scope: &Scope) -> Result<Types, String> {
         match expr {
-            AstKind::Value(v) => Ok(v),
+            AstKind::Value(v) => Ok(v.clone()),
 
             AstKind::Ident(n) => {
                 if matches!(
                     n.as_str(),
                     "number" | "float" | "bool" | "string" | "sqrt" | "cos" | "sin"
                 ) {
-                    Ok(Types::String(n))
+                    Ok(Types::String(n.clone()))
                 } else if n.as_str() == "vector" {
                     Ok(Types::Vector(Vec::new()))
                 } else if n.contains('[') {
-                    let (name, index) = Self::get_vector(frame, &n)?;
+                    let (name, index) = self.get_vector(scope, n)?;
 
-                    if let Some((Types::Vector(vec), _)) = frame.vars.get(&name) {
+                    if let Some((Types::Vector(vec), _)) = scope.get(&self.consts, &name) {
                         match index {
                             VectorIndex::Index(index) => {
                                 vec.get(index).ok_or(errors::A17.to_owned()).cloned()
                             }
-                            VectorIndex::Length => Ok(Types::Number(vec.len() as i32)),
-                            VectorIndex::Capacity => Ok(Types::Number(vec.capacity() as i32)),
+                            VectorIndex::Length => Ok(Types::Number(vec.len() as i64)),
+                            VectorIndex::Capacity => Ok(Types::Number(vec.capacity() as i64)),
                         }
                     } else {
                         Err(errors::A30.to_owned())
                     }
                 } else {
-                    Ok(frame.vars.get(&n).cloned().ok_or(errors::A03.to_owned())?.0)
+                    Ok(scope
+                        .get(&self.consts, n)
+                        .cloned()
+                        .ok_or(errors::A03.to_owned())?
+                        .0)
                 }
             }
 
             AstKind::UnaryOp { op, expr } => {
-                let v = Self::eval(*expr, frame)?;
+                let v = self.eval(expr, scope)?;
 
                 match op {
                     Token::Not => Ok(Types::Boolean(!v.as_bool()?)),
@@ -408,8 +395,8 @@ impl Interpreter {
             }
 
             AstKind::BinaryOp { left, op, right } => {
-                let mut l = Self::eval(*left, frame)?;
-                let r = Self::eval(*right, frame)?;
+                let mut l = self.eval(left, scope)?;
+                let r = self.eval(right, scope)?;
 
                 match op {
                     Token::As => {
@@ -444,11 +431,11 @@ impl Interpreter {
                         Ok(l)
                     }
 
-                    Token::Plus => l.add(r),
-                    Token::Minus => l.sub(r),
-                    Token::Multiply => l.mul(r),
-                    Token::Divide => l.div(r),
-                    Token::Mod => l.rem(r),
+                    Token::Plus => l.add(&r),
+                    Token::Minus => l.sub(&r),
+                    Token::Multiply => l.mul(&r),
+                    Token::Divide => l.div(&r),
+                    Token::Mod => l.rem(&r),
 
                     Token::Equal => Ok(Types::Boolean(l == r)),
                     Token::NotEqual => Ok(Types::Boolean(l != r)),

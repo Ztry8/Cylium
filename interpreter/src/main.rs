@@ -11,6 +11,7 @@ mod file_handler;
 mod interpreter;
 mod lexer;
 mod parser;
+mod scope;
 mod types;
 
 fn main() {
