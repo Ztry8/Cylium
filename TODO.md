@@ -7,6 +7,7 @@
   * [x] Implement `for` loop
 
 * [ ] Replace AST interpreter with IR-based interpreter
+* [ ] Add vectors
 
 * [ ] Improve the standard library
   * [ ] Vector operations
@@ -15,6 +16,7 @@
   * [ ] File system API
   * [ ] Networking API
 
+* [ ] Replace procedures with functions ?
 * [ ] Community libraries support
 * [ ] Foreign Function Interface (FFI)
   * [ ] Rust integration
