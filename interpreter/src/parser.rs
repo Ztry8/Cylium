@@ -2,8 +2,9 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{errors, file_handler::FileHandler, lexer::Token, types::Types};
+use crate::{errors, file_handler::FileHandler, lexer::Token, types::TypesCheck};
 
+#[macro_export]
 macro_rules! node {
     ($line:expr, $kind:expr) => {
         AstNode {
@@ -21,28 +22,37 @@ pub struct AstNode {
 
 #[derive(Debug, Clone)]
 pub enum AstKind {
-    Proc {
-        name: String,
-        body: Vec<AstNode>,
-        args: Vec<String>,
-    },
-    VarDecl {
-        name: String,
-        value: Box<AstKind>,
-        is_const: bool,
-    },
+    Ident(String),
+
+    Number(i64),
+    Float(f64),
+    String(String),
+    Boolean(bool),
+    // Vector(Vec<AstKind>),
     Delete(String),
     Echo(Box<AstKind>),
     Exit(i32),
+
+    Proc {
+        name: String,
+        body: Vec<AstNode>,
+        args: Vec<(String, TypesCheck)>,
+    },
+    VarDecl {
+        name: String,
+        type_: TypesCheck,
+        value: Box<AstKind>,
+        is_const: bool,
+    },
     ProcCall {
         name: String,
         args: Vec<Token>,
     },
-    MethodCall {
-        receiver: String,
-        name: String,
-        args: Vec<Types>,
-    },
+    // MethodCall {
+    //     receiver: String,
+    //     name: String,
+    //     args: Vec<AstKind>,
+    // },
     Assign {
         name: String,
         op: Token,
@@ -57,8 +67,10 @@ pub enum AstKind {
         op: Token,
         expr: Box<AstKind>,
     },
-    Value(Types),
-    Ident(String),
+    AsOp {
+        expr: Box<AstKind>,
+        op: Cast,
+    },
     Condition {
         expr: Box<AstKind>,
         yes: Vec<AstNode>,
@@ -81,6 +93,17 @@ pub enum AstKind {
 pub enum ElseBlock {
     ElseIf(Box<AstNode>),
     Else(Vec<AstNode>),
+}
+
+#[derive(Debug, Clone)]
+pub enum Cast {
+    String,
+    Number,
+    Float,
+    Boolean,
+    Sin,
+    Cos,
+    Sqrt,
 }
 
 pub struct Parser {
@@ -136,8 +159,20 @@ impl Parser {
 
     fn parse_var(&mut self) -> Result<AstNode, String> {
         let is_const = self.current_token() == Some(&Token::Const);
-        self.pos += 1;
 
+        if is_const {
+            self.pos += 1;
+        }
+
+        let type_ = match self.current_token() {
+            Some(Token::Number) => TypesCheck::Number,
+            Some(Token::Float) => TypesCheck::Float,
+            Some(Token::String) => TypesCheck::String,
+            Some(Token::Bool) => TypesCheck::Boolean,
+            _ => return Err(errors::A15.to_owned()),
+        };
+
+        self.pos += 1;
         if let Some(Token::Ident(name)) = self.current_token().cloned() {
             self.pos += 1;
 
@@ -152,6 +187,7 @@ impl Parser {
                     self.line,
                     AstKind::VarDecl {
                         name,
+                        type_,
                         value: Box::new(self.parse_value()?),
                         is_const,
                     }
@@ -178,26 +214,36 @@ impl Parser {
             return Ok(first);
         }
 
-        let mut values = Vec::new();
-        match first {
-            AstKind::Value(v) => values.push(v),
-            _ => return Err(errors::A19.to_owned()),
-        };
+        if !matches!(
+            first,
+            AstKind::Number(_) | AstKind::Float(_) | AstKind::String(_) | AstKind::Boolean(_)
+        ) {
+            return Err(errors::A19.to_owned());
+        }
+
+        let mut values = vec![first];
 
         while self.current_token() == Some(&Token::Comma) {
             self.pos += 1;
 
-            match self.parse_expr(0)? {
-                AstKind::Value(v) => values.push(v),
-                _ => return Err(errors::A19.to_owned()),
-            };
+            let new = self.parse_expr(0)?;
+
+            if !matches!(
+                new,
+                AstKind::Number(_) | AstKind::Float(_) | AstKind::String(_) | AstKind::Boolean(_)
+            ) {
+                return Err(errors::A19.to_owned());
+            }
+
+            values.push(new);
         }
 
         if self.current_token().is_some() {
             return Err(errors::A15.to_owned());
         }
 
-        Ok(AstKind::Value(Types::Vector(values)))
+        // Ok(AstKind::Vector(values))
+        todo!()
     }
 
     fn parse_expr(&mut self, min_prec: u8) -> Result<AstKind, String> {
@@ -228,9 +274,37 @@ impl Parser {
                 self.pos += 1;
                 AstKind::Ident(name)
             }
-            Some(Token::Value(v)) => {
+            Some(Token::Number) => {
                 self.pos += 1;
-                AstKind::Value(v)
+                AstKind::Ident("number".to_owned())
+            }
+            Some(Token::Float) => {
+                self.pos += 1;
+                AstKind::Ident("float".to_owned())
+            }
+            Some(Token::String) => {
+                self.pos += 1;
+                AstKind::Ident("string".to_owned())
+            }
+            Some(Token::Bool) => {
+                self.pos += 1;
+                AstKind::Ident("bool".to_owned())
+            }
+            Some(Token::NumberValue(v)) => {
+                self.pos += 1;
+                AstKind::Number(v)
+            }
+            Some(Token::FloatValue(v)) => {
+                self.pos += 1;
+                AstKind::Float(v)
+            }
+            Some(Token::StringValue(v)) => {
+                self.pos += 1;
+                AstKind::String(v)
+            }
+            Some(Token::BooleanValue(v)) => {
+                self.pos += 1;
+                AstKind::Boolean(v)
             }
             _ => return Err(errors::A15.to_owned()),
         };
@@ -251,11 +325,31 @@ impl Parser {
 
             let right = self.parse_expr(prec + 1)?;
 
-            left = AstKind::BinaryOp {
-                left: Box::new(left),
-                op: op_tok,
-                right: Box::new(right),
-            };
+            if op_tok == Token::As {
+                left = AstKind::AsOp {
+                    expr: Box::new(left),
+                    op: if let AstKind::Ident(name) = right {
+                        match name.as_str() {
+                            "string" => Cast::String,
+                            "number" => Cast::Number,
+                            "float" => Cast::Float,
+                            "bool" => Cast::Boolean,
+                            "sin" => Cast::Sin,
+                            "cos" => Cast::Cos,
+                            "sqrt" => Cast::Sqrt,
+                            _ => return Err(errors::A15.to_owned()),
+                        }
+                    } else {
+                        return Err(errors::A15.to_owned());
+                    },
+                };
+            } else {
+                left = AstKind::BinaryOp {
+                    left: Box::new(left),
+                    op: op_tok,
+                    right: Box::new(right),
+                };
+            }
         }
 
         Ok(left)
@@ -288,7 +382,23 @@ impl Parser {
 
             while self.pos < self.tokens[self.line].len() {
                 match self.current_token().cloned() {
-                    Some(Token::Ident(arg)) => args.push(arg),
+                    Some(Token::Ident(arg)) => {
+                        self.pos += 1;
+                        if self.current_token() != Some(&Token::Colon) {
+                            return Err(errors::A15.to_owned());
+                        }
+
+                        self.pos += 1;
+                        let type_ = match self.current_token() {
+                            Some(Token::Number) => TypesCheck::Number,
+                            Some(Token::Float) => TypesCheck::Float,
+                            Some(Token::String) => TypesCheck::String,
+                            Some(Token::Bool) => TypesCheck::Boolean,
+                            _ => return Err(errors::A15.to_owned()),
+                        };
+
+                        args.push((arg, type_));
+                    }
                     _ => return Err(errors::A15.to_owned()),
                 }
 
@@ -332,14 +442,15 @@ impl Parser {
             Some(Token::Exit) => {
                 self.pos += 1;
 
-                if let Some(Token::Value(Types::Number(code))) = self.current_token().cloned() {
+                if let Some(Token::NumberValue(code)) = self.current_token().cloned() {
                     self.pos += 1;
                     Ok(node!(self.line, AstKind::Exit(code as i32)))
                 } else {
                     Err(errors::A26.to_owned())
                 }
             }
-            Some(Token::Var) | Some(Token::Const) => self.parse_var(),
+            Some(Token::Number) | Some(Token::Float) | Some(Token::String) | Some(Token::Bool)
+            | Some(Token::Const) => self.parse_var(),
             Some(Token::Call) => {
                 self.pos += 1;
                 if let Some(Token::Ident(name)) = self.current_token().cloned() {
@@ -350,7 +461,14 @@ impl Parser {
                     while self.pos < self.tokens[self.line].len() {
                         let current = self.current_token().cloned();
 
-                        if matches!(current, Some(Token::Ident(_)) | Some(Token::Value(_))) {
+                        if matches!(
+                            current,
+                            Some(Token::Ident(_))
+                                | Some(Token::NumberValue(_))
+                                | Some(Token::FloatValue(_))
+                                | Some(Token::StringValue(_))
+                                | Some(Token::BooleanValue(_))
+                        ) {
                             args.push(current.unwrap());
                         } else {
                             return Err(errors::A15.to_owned());
@@ -506,28 +624,32 @@ impl Parser {
                 .ok_or(errors::A15.to_owned())?
                 .clone()
             {
-                Token::Ident(name) => {
+                Token::Ident(_) => {
                     self.pos += 2;
 
                     let mut args = Vec::new();
 
                     while self.pos < self.tokens[self.line].len() {
                         match self.current_token().cloned() {
-                            Some(Token::Value(arg)) => args.push(arg),
+                            Some(Token::NumberValue(arg)) => args.push(AstKind::Number(arg)),
+                            Some(Token::FloatValue(arg)) => args.push(AstKind::Float(arg)),
+                            Some(Token::BooleanValue(arg)) => args.push(AstKind::Boolean(arg)),
+                            Some(Token::StringValue(arg)) => args.push(AstKind::String(arg)),
                             _ => return Err(errors::A15.to_owned()),
                         }
 
                         self.pos += 1;
                     }
 
-                    Ok(node!(
-                        self.line,
-                        AstKind::MethodCall {
-                            receiver: receiver.clone(),
-                            name: name.clone(),
-                            args,
-                        }
-                    ))
+                    // Ok(node!(
+                    //     self.line,
+                    //     AstKind::MethodCall {
+                    //         receiver: receiver.clone(),
+                    //         name: name.clone(),
+                    //         args,
+                    //     }
+                    // ))
+                    todo!()
                 }
                 Token::Assign
                 | Token::PlusAssign

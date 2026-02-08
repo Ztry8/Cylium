@@ -3,9 +3,9 @@
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
 use file_handler::FileHandler;
-use interpreter::Interpreter;
 use parser::Parser;
 
+mod bytecode;
 mod errors;
 mod file_handler;
 mod interpreter;
@@ -13,6 +13,7 @@ mod lexer;
 mod parser;
 mod scope;
 mod types;
+mod validator;
 
 fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
@@ -70,9 +71,12 @@ fn main() {
                     let mut parser = Parser::new(tokens);
                     let ast = parser.start(&handler);
 
-                    let interpreter = Interpreter::new(handler, &ast);
+                    validator::check_types(&handler, &ast);
 
-                    interpreter.run();
+                    let (program, consts) = bytecode::compile(&handler, ast);
+                    dbg!(&program);
+
+                    interpreter::execute(&handler, program, consts);
                 }
                 Err(_) => {
                     println!("Error: Specified file not found.");

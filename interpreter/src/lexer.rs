@@ -2,12 +2,15 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{errors, file_handler::FileHandler, types::Types};
+use crate::{errors, file_handler::FileHandler};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Ident(String),
-    Value(Types),
+    NumberValue(i64),
+    FloatValue(f64),
+    StringValue(String),
+    BooleanValue(bool),
 
     Call,     // call
     As,       // as
@@ -18,7 +21,10 @@ pub enum Token {
     To,       // to
     Step,     // step
     EndFor,   // endfor
-    Var,      // var
+    Number,   // number
+    Float,    // float
+    String,   // string
+    Bool,     // bool
     Const,    // const
     If,       // if
     Else,     // else
@@ -58,6 +64,7 @@ pub enum Token {
     OpenBrace,    // {
     CloseBrace,   // }
     Comma,        // ,
+    Colon,        // :
 }
 
 pub fn tokenize_file(handler: &FileHandler) -> Vec<Vec<Token>> {
@@ -140,7 +147,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                     return Err(errors::A21.to_owned());
                 }
 
-                tokens.push(Token::Value(Types::String(string)))
+                tokens.push(Token::StringValue(string))
             }
 
             _ => {
@@ -152,7 +159,14 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                     }
 
                     i -= 1;
-                    tokens.push(Token::Value(Types::create(&num)));
+
+                    if let Ok(number) = num.parse::<i64>() {
+                        tokens.push(Token::NumberValue(number));
+                    } else if let Ok(float) = num.parse::<f64>() {
+                        tokens.push(Token::FloatValue(float));
+                    } else {
+                        return Err(errors::A34.to_owned());
+                    }
                 } else if chars[i].is_alphabetic() || chars[i] == '_' {
                     let mut ident = String::new();
                     while i < chars.len()
@@ -167,11 +181,14 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
 
                     i -= 1;
                     match ident.as_str() {
-                        "true" => tokens.push(Token::Value(Types::Boolean(true))),
-                        "false" => tokens.push(Token::Value(Types::Boolean(false))),
+                        "true" => tokens.push(Token::BooleanValue(true)),
+                        "false" => tokens.push(Token::BooleanValue(false)),
                         "call" => tokens.push(Token::Call),
                         "as" => tokens.push(Token::As),
-                        "var" => tokens.push(Token::Var),
+                        "number" => tokens.push(Token::Number),
+                        "float" => tokens.push(Token::Float),
+                        "string" => tokens.push(Token::String),
+                        "bool" => tokens.push(Token::Bool),
                         "const" => tokens.push(Token::Const),
                         "if" => tokens.push(Token::If),
                         "else" => tokens.push(Token::Else),

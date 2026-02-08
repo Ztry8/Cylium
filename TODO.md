@@ -6,7 +6,12 @@
   * [x] Implement `while` loop
   * [x] Implement `for` loop
 
-* [ ] Replace AST interpreter with IR-based interpreter
+* [x] Replace AST interpreter with IR-based interpreter
+  * [ ] Implement `if-else` block
+  * [ ] Implement `while` loop
+  * [ ] Implement `for` loop
+
+* [ ] Replace procedures with functions 
 * [ ] Add vectors
 
 * [ ] Improve the standard library
@@ -16,8 +21,10 @@
   * [ ] File system API
   * [ ] Networking API
 
-* [ ] Replace procedures with functions ?
+* [ ] Replace interpreter with JIT ?
 * [ ] Community libraries support
 * [ ] Foreign Function Interface (FFI)
   * [ ] Rust integration
   * [ ] C++ integration
+Replace AST interpreter with IR-based interpreter
+Major refactoring and optimi
