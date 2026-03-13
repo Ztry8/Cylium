@@ -62,6 +62,14 @@ pub enum Instruction {
     JumpIfFalse(usize),
 }
 
+#[inline(always)]
+fn push_node(out: &mut Vec<Node>, instruction: Instruction, line: usize) {
+    out.push(Node {
+        instruction,
+        line_number: line,
+    });
+}
+
 pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Proc>, Vec<Node>) {
     let mut const_code = Vec::new();
     let mut procs = HashMap::new();
@@ -81,20 +89,9 @@ pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Pro
                 Err(e) => handler.show_error(node.line, &e),
             },
             AstKind::Proc { name, body, args } => {
-                let mut proc_body = Vec::new();
+                let mut proc_body: Vec<Node> = Vec::new();
 
-                for node in body {
-                    let mut temp = Vec::new();
-
-                    if let Err(e) = main_compile(node.kind, &mut temp) {
-                        handler.show_error(node.line, &e);
-                    };
-
-                    proc_body.extend(temp.into_iter().map(|inst| Node {
-                        instruction: inst,
-                        line_number: node.line,
-                    }))
-                }
+                compile_body(handler, body, &mut proc_body);
 
                 procs.insert(
                     name,
@@ -111,17 +108,26 @@ pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Pro
     (procs, const_code)
 }
 
-fn main_compile(node: AstKind, instructions: &mut Vec<Instruction>) -> Result<(), String> {
+fn compile_body(handler: &FileHandler, body: Vec<AstNode>, out: &mut Vec<Node>) {
+    for node in body {
+        let line = node.line;
+        if let Err(e) = main_compile(node.kind, out, line) {
+            handler.show_error(line, &e);
+        }
+    }
+}
+
+fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), String> {
     match node {
         AstKind::Echo(expr) => {
-            expr_compile(instructions, *expr)?;
-            instructions.push(Instruction::Echo)
+            expr_compile(out, *expr, line)?;
+            push_node(out, Instruction::Echo, line);
         }
         AstKind::Delete(name) => {
-            instructions.push(Instruction::Delete(name));
+            push_node(out, Instruction::Delete(name), line);
         }
         AstKind::Exit(code) => {
-            instructions.push(Instruction::Exit(code));
+            push_node(out, Instruction::Exit(code), line);
         }
         AstKind::VarDecl {
             name,
@@ -129,72 +135,64 @@ fn main_compile(node: AstKind, instructions: &mut Vec<Instruction>) -> Result<()
             is_const,
             ..
         } => {
-            instructions.extend(var_compile(name, *value, is_const)?);
+            for inst in var_compile(name, *value, is_const)? {
+                push_node(out, inst, line);
+            }
         }
         AstKind::ProcCall { name, args } => {
             for arg in args.iter().rev() {
-                match arg {
-                    Token::Ident(name) => instructions.push(Instruction::Load(name.clone())),
-                    Token::NumberValue(value) => {
-                        instructions.push(Instruction::Push(Types::Number(*value)))
-                    }
-                    Token::FloatValue(value) => {
-                        instructions.push(Instruction::Push(Types::Float(*value)))
-                    }
-                    Token::StringValue(value) => {
-                        instructions.push(Instruction::Push(Types::String(value.clone())))
-                    }
-                    Token::BooleanValue(value) => {
-                        instructions.push(Instruction::Push(Types::Boolean(*value)))
-                    }
+                let inst = match arg {
+                    Token::Ident(name) => Instruction::Load(name.clone()),
+                    Token::NumberValue(value) => Instruction::Push(Types::Number(*value)),
+                    Token::FloatValue(value) => Instruction::Push(Types::Float(*value)),
+                    Token::StringValue(value) => Instruction::Push(Types::String(value.clone())),
+                    Token::BooleanValue(value) => Instruction::Push(Types::Boolean(*value)),
                     _ => unreachable!(),
-                }
+                };
+                push_node(out, inst, line);
             }
-
-            instructions.push(Instruction::Call(name, args.len()));
+            push_node(out, Instruction::Call(name, args.len()), line);
         }
         AstKind::Assign { name, op, expr } => {
             if op != Token::Assign {
-                instructions.push(Instruction::Load(name.clone()));
+                push_node(out, Instruction::Load(name.clone()), line);
             }
 
-            expr_compile(instructions, *expr)?;
-
-            let mut make = |inst| {
-                instructions.push(inst);
-                instructions.push(Instruction::StoreLocal(name.clone()));
-            };
+            expr_compile(out, *expr, line)?;
 
             match op {
                 Token::Assign => {
-                    instructions.push(Instruction::StoreLocal(name));
+                    push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::PlusAssign => {
-                    make(Instruction::Plus);
+                    push_node(out, Instruction::Plus, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::MinusAssign => {
-                    make(Instruction::Minus);
+                    push_node(out, Instruction::Minus, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::MultiplyAssign => {
-                    make(Instruction::Multiply);
+                    push_node(out, Instruction::Multiply, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::DivideAssign => {
-                    make(Instruction::Divide);
+                    push_node(out, Instruction::Divide, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::ModAssign => {
-                    make(Instruction::Mod);
+                    push_node(out, Instruction::Mod, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
                 }
                 _ => unreachable!(),
-            };
+            }
         }
         AstKind::Condition { expr, yes, no } => {
-            condition_compile(instructions, *expr, yes, no)?;
+            condition_compile(out, *expr, yes, no, line)?;
         }
-
         AstKind::While { expr, body } => {
-            while_compile(instructions, *expr, body)?;
+            while_compile(out, *expr, body, line)?;
         }
-
         AstKind::For {
             var_name,
             start,
@@ -202,72 +200,159 @@ fn main_compile(node: AstKind, instructions: &mut Vec<Instruction>) -> Result<()
             step,
             body,
         } => {
-            for_compile(instructions, var_name, *start, *end, *step, body)?;
+            for_compile(out, var_name, *start, *end, *step, body, line)?;
         }
         _ => unreachable!(),
-    };
+    }
 
     Ok(())
 }
 
 fn condition_compile(
-    instructions: &mut Vec<Instruction>,
+    out: &mut Vec<Node>,
     expr: AstKind,
     yes: Vec<AstNode>,
     no: Option<ElseBlock>,
+    line: usize,
 ) -> Result<(), String> {
-    todo!()
+    expr_compile(out, expr, line)?;
+
+    let jump_if_false_idx = out.len();
+    push_node(out, Instruction::JumpIfFalse(0), line);
+
+    for node in yes {
+        main_compile(node.kind, out, node.line)?;
+    }
+
+    match no {
+        None => {
+            let end = out.len();
+            out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(end);
+        }
+        Some(ElseBlock::Else(else_body)) => {
+            let jump_idx = out.len();
+            push_node(out, Instruction::Jump(0), line);
+
+            let else_start = out.len();
+            out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(else_start);
+
+            for node in else_body {
+                main_compile(node.kind, out, node.line)?;
+            }
+
+            let end = out.len();
+            out[jump_idx].instruction = Instruction::Jump(end);
+        }
+        Some(ElseBlock::ElseIf(node)) => {
+            let jump_idx = out.len();
+            push_node(out, Instruction::Jump(0), line);
+
+            let elseif_start = out.len();
+            out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(elseif_start);
+
+            main_compile(node.kind, out, node.line)?;
+
+            let end = out.len();
+            out[jump_idx].instruction = Instruction::Jump(end);
+        }
+    }
+
+    Ok(())
 }
 
 fn while_compile(
-    instructions: &mut Vec<Instruction>,
+    out: &mut Vec<Node>,
     expr: AstKind,
     body: Vec<AstNode>,
+    line: usize,
 ) -> Result<(), String> {
-    todo!()
+    let loop_start = out.len();
+
+    expr_compile(out, expr, line)?;
+
+    let jump_if_false_idx = out.len();
+    push_node(out, Instruction::JumpIfFalse(0), line);
+
+    for node in body {
+        main_compile(node.kind, out, node.line)?;
+    }
+
+    push_node(out, Instruction::Jump(loop_start), line);
+
+    let end = out.len();
+    out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(end);
+
+    Ok(())
 }
 
 fn for_compile(
-    instructions: &mut Vec<Instruction>,
+    out: &mut Vec<Node>,
     var_name: String,
     start: AstKind,
     end: AstKind,
     step: Option<AstKind>,
     body: Vec<AstNode>,
+    line: usize,
 ) -> Result<(), String> {
-    todo!()
+    expr_compile(out, start, line)?;
+    push_node(out, Instruction::StoreLocal(var_name.clone()), line);
+
+    let loop_start = out.len();
+
+    expr_compile(out, end, line)?;
+    push_node(out, Instruction::Load(var_name.clone()), line);
+    push_node(out, Instruction::LessEqual, line);
+
+    let jump_if_false_idx = out.len();
+    push_node(out, Instruction::JumpIfFalse(0), line);
+
+    for node in body {
+        main_compile(node.kind, out, node.line)?;
+    }
+
+    push_node(out, Instruction::Load(var_name.clone()), line);
+    match step {
+        Some(step_expr) => expr_compile(out, step_expr, line)?,
+        None => push_node(out, Instruction::Push(Types::Number(1)), line),
+    }
+    push_node(out, Instruction::Plus, line);
+    push_node(out, Instruction::StoreLocal(var_name), line);
+
+    push_node(out, Instruction::Jump(loop_start), line);
+
+    let end_idx = out.len();
+    out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(end_idx);
+
+    Ok(())
 }
 
-fn expr_compile(instructions: &mut Vec<Instruction>, value: AstKind) -> Result<(), String> {
+fn expr_compile(out: &mut Vec<Node>, value: AstKind, line: usize) -> Result<(), String> {
     match value {
         AstKind::UnaryOp { op, expr } => {
-            expr_compile(instructions, *expr)?;
-
-            match op {
-                Token::Not => instructions.push(Instruction::Not),
-                Token::Minus => instructions.push(Instruction::Neg),
+            expr_compile(out, *expr, line)?;
+            let inst = match op {
+                Token::Not => Instruction::Not,
+                Token::Minus => Instruction::Neg,
                 _ => return Err(errors::A15.to_owned()),
             };
+            push_node(out, inst, line);
         }
-
         AstKind::AsOp { expr, op } => {
-            expr_compile(instructions, *expr)?;
-
-            match op {
-                Cast::String => instructions.push(Instruction::CastToString),
-                Cast::Number => instructions.push(Instruction::CastToNumber),
-                Cast::Float => instructions.push(Instruction::CastToFloat),
-                Cast::Boolean => instructions.push(Instruction::CastToBoolean),
-                Cast::Sqrt => instructions.push(Instruction::Sqrt),
-                Cast::Sin => instructions.push(Instruction::Sin),
-                Cast::Cos => instructions.push(Instruction::Cos),
-            }
+            expr_compile(out, *expr, line)?;
+            let inst = match op {
+                Cast::String => Instruction::CastToString,
+                Cast::Number => Instruction::CastToNumber,
+                Cast::Float => Instruction::CastToFloat,
+                Cast::Boolean => Instruction::CastToBoolean,
+                Cast::Sqrt => Instruction::Sqrt,
+                Cast::Sin => Instruction::Sin,
+                Cast::Cos => Instruction::Cos,
+            };
+            push_node(out, inst, line);
         }
-
         AstKind::BinaryOp { left, op, right } => {
-            expr_compile(instructions, *right)?;
-            expr_compile(instructions, *left)?;
-
+            expr_compile(out, *right, line)?;
+            expr_compile(out, *left, line)?;
             let inst = match op {
                 Token::Or => Instruction::Or,
                 Token::And => Instruction::And,
@@ -284,44 +369,31 @@ fn expr_compile(instructions: &mut Vec<Instruction>, value: AstKind) -> Result<(
                 Token::Mod => Instruction::Mod,
                 _ => unreachable!(),
             };
-
-            instructions.push(inst);
+            push_node(out, inst, line);
         }
-
-        AstKind::Ident(name) => instructions.push(Instruction::Load(name)),
-
-        AstKind::Number(value) => instructions.push(Instruction::Push(Types::Number(value))),
-        AstKind::Float(value) => instructions.push(Instruction::Push(Types::Float(value))),
-        AstKind::String(value) => instructions.push(Instruction::Push(Types::String(value))),
-        AstKind::Boolean(value) => instructions.push(Instruction::Push(Types::Boolean(value))),
-        // AstKind::Vector(value) => {
-        //     instructions.push(Instruction::Push(Types::Vector(
-        //         value
-        //             .iter()
-        //             .map(|v| match v {
-        //                 AstKind::Number(value) => Types::Number(*value),
-        //                 AstKind::Float(value) => Types::Float(*value),
-        //                 AstKind::String(value) => Types::String(value.clone()),
-        //                 AstKind::Boolean(value) => Types::Boolean(*value),
-        //                 _ => unreachable!(),
-        //             })
-        //             .collect(),
-        //     )));
-        // }
+        AstKind::Ident(name) => push_node(out, Instruction::Load(name), line),
+        AstKind::Number(value) => push_node(out, Instruction::Push(Types::Number(value)), line),
+        AstKind::Float(value) => push_node(out, Instruction::Push(Types::Float(value)), line),
+        AstKind::String(value) => push_node(out, Instruction::Push(Types::String(value)), line),
+        AstKind::Boolean(value) => push_node(out, Instruction::Push(Types::Boolean(value)), line),
         _ => unreachable!(),
-    };
+    }
 
     Ok(())
 }
 
 fn var_compile(name: String, value: AstKind, is_const: bool) -> Result<Vec<Instruction>, String> {
     let mut instructions = Vec::new();
-    expr_compile(&mut instructions, value)?;
+
+    let mut temp: Vec<Node> = Vec::new();
+    expr_compile(&mut temp, value, 0)?;
+
+    instructions.extend(temp.into_iter().map(|n| n.instruction));
 
     if is_const {
-        instructions.push(Instruction::StoreConst(name))
+        instructions.push(Instruction::StoreConst(name));
     } else {
-        instructions.push(Instruction::StoreLocal(name))
+        instructions.push(Instruction::StoreLocal(name));
     }
 
     Ok(instructions)

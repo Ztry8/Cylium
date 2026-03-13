@@ -114,7 +114,6 @@ fn main_execute(
             if std::io::stdin().read_line(&mut buf).is_err() {
                 FileHandler::show_warning(errors::C02);
             }
-
             Types::String(buf.trim().to_string())
         } else {
             scope
@@ -133,47 +132,41 @@ fn main_execute(
         }
         Instruction::Call(name, argc) => {
             if let Some(proc) = program.get(name) {
-                let mut scope = Scope::new();
+                let mut proc_scope = Scope::new();
 
                 for i in 0..*argc {
-                    scope.declare(
+                    proc_scope.declare(
                         proc.args[i].clone().0,
                         stack.pop().ok_or(errors::A27.to_owned())?,
                         false,
-                    )
+                    );
                 }
 
-                let mut stack = Vec::new();
-
+                let mut proc_stack = Vec::new();
                 let mut i = 0;
+
                 while i < proc.body.len() as i32 {
                     main_execute(
                         program,
                         &proc.body[i as usize].instruction,
-                        &mut scope,
+                        &mut proc_scope,
                         consts,
-                        &mut stack,
+                        &mut proc_stack,
                         &mut i,
                     )?;
-
                     i += 1;
                 }
             } else {
                 return Err(errors::A24.to_owned());
             }
         }
-        Instruction::Echo => {
-            if let Some(value) = stack.pop() {
-                match value {
-                    Types::String(value) => println!("{}", value),
-                    Types::Boolean(value) => println!("{}", value),
-                    Types::Number(value) => println!("{}", value),
-                    Types::Float(value) => println!("{}", value),
-                }
-            } else {
-                return Err(errors::A15.to_owned());
-            }
-        }
+        Instruction::Echo => match stack.pop() {
+            Some(Types::String(value)) => println!("{}", value),
+            Some(Types::Boolean(value)) => println!("{}", value),
+            Some(Types::Number(value)) => println!("{}", value),
+            Some(Types::Float(value)) => println!("{}", value),
+            None => return Err(errors::A15.to_owned()),
+        },
         _ => expr_execute(instruction, stack)?,
     }
 
@@ -222,36 +215,45 @@ fn expr_execute(instruction: &Instruction, stack: &mut Vec<Types>) -> Result<(),
             _ => unreachable!(),
         },
         Instruction::Greater => match (stack.pop(), stack.pop()) {
-            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(b > a)),
-            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(b > a)),
-            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(b > a)),
+            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(a > b)),
+            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(a > b)),
+            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(a > b)),
             _ => unreachable!(),
         },
         Instruction::Less => match (stack.pop(), stack.pop()) {
-            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(b < a)),
-            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(b < a)),
-            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(b < a)),
+            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(a < b)),
+            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(a < b)),
+            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(a < b)),
             _ => unreachable!(),
         },
         Instruction::GreaterEqual => match (stack.pop(), stack.pop()) {
-            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(b >= a)),
-            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(b >= a)),
-            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(b >= a)),
+            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(a >= b)),
+            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(a >= b)),
+            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(a >= b)),
             _ => unreachable!(),
         },
         Instruction::LessEqual => match (stack.pop(), stack.pop()) {
-            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(b <= a)),
-            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(b <= a)),
-            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(b <= a)),
+            (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Boolean(a <= b)),
+            (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Boolean(a <= b)),
+            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::Boolean(a <= b)),
             _ => unreachable!(),
         },
         Instruction::Plus => match (stack.pop(), stack.pop()) {
             (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Number(a + b)),
             (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Float(a + b)),
-            (Some(Types::String(a)), Some(Types::String(mut b))) => stack.push(Types::String({
-                b.push_str(&a);
-                b
-            })),
+            (Some(Types::String(a)), Some(Types::String(b))) => stack.push(Types::String(a + &b)),
+            (Some(Types::String(a)), Some(Types::Number(b))) => {
+                stack.push(Types::String(a + &b.to_string()))
+            }
+            (Some(Types::String(a)), Some(Types::Float(b))) => {
+                stack.push(Types::String(a + &b.to_string()))
+            }
+            (Some(Types::Number(a)), Some(Types::String(b))) => {
+                stack.push(Types::String(a.to_string() + &b))
+            }
+            (Some(Types::Float(a)), Some(Types::String(b))) => {
+                stack.push(Types::String(a.to_string() + &b))
+            }
             _ => unreachable!(),
         },
         Instruction::Minus => match (stack.pop(), stack.pop()) {
@@ -262,20 +264,12 @@ fn expr_execute(instruction: &Instruction, stack: &mut Vec<Types>) -> Result<(),
         Instruction::Multiply => match (stack.pop(), stack.pop()) {
             (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Number(a * b)),
             (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Float(a * b)),
-            (Some(Types::String(a)), Some(Types::Number(b))) => stack.push(Types::String({
-                let mut t = String::new();
-                for _ in 0..b {
-                    t.push_str(&a);
-                }
-                t
-            })),
-            (Some(Types::Number(a)), Some(Types::String(b))) => stack.push(Types::String({
-                let mut t = String::new();
-                for _ in 0..a {
-                    t.push_str(&b);
-                }
-                t
-            })),
+            (Some(Types::String(a)), Some(Types::Number(b))) => {
+                stack.push(Types::String(a.repeat(b as usize)))
+            }
+            (Some(Types::Number(a)), Some(Types::String(b))) => {
+                stack.push(Types::String(b.repeat(a as usize)))
+            }
             _ => unreachable!(),
         },
         Instruction::Divide => match (stack.pop(), stack.pop()) {

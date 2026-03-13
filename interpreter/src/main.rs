@@ -54,7 +54,7 @@ fn main() {
                 );
 
                 println!(
-                    "Credits:\n    Author: Ztry8 (AslanD)\n    https://cylium.site/contributors\n"
+                    "Credits:\n    Author: Ztry8 (AslanD)\n    https://github.com/Ztry8/Cylium/graphs/contributors\n"
                 );
             }
             _ => match std::fs::read_to_string(&file_name) {

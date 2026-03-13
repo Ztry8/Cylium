@@ -1,7 +1,4 @@
 # Implementation of the Fibonacci sequence in Cylium
-# Copyright (c) 2026 Ztry8 (AslanD)
-# Licensed under the Apache License, Version 2.0 (the "License");
-# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
 proc main
     number n = input as number
@@ -9,7 +6,7 @@ proc main
     number a = 0
     number b = 1
 
-    for number i from 0 to n 
+    for i from 0 to n 
         echo a
 
         number next = a + b 

@@ -98,6 +98,8 @@ fn main_check(
                         }
                         Token::PlusAssign => match (type_, value) {
                             (TypesCheck::String, TypesCheck::String) => {}
+                            (TypesCheck::String, TypesCheck::Number) => {}
+                            (TypesCheck::String, TypesCheck::Float) => {}
                             (TypesCheck::Number, TypesCheck::Number) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
@@ -196,25 +198,16 @@ fn main_check(
         } => {
             let start_type = expr_check(variables, consts, start)?;
 
-            if !matches!(
-                start_type,
-                TypesCheck::Float | TypesCheck::Number
-            ) {
+            if !matches!(start_type, TypesCheck::Number) {
                 return Err(errors::A15.to_owned());
             }
 
-            if !matches!(
-                expr_check(variables, consts, end)?,
-                TypesCheck::Float | TypesCheck::Number
-            ) {
+            if !matches!(expr_check(variables, consts, end)?, TypesCheck::Number) {
                 return Err(errors::A15.to_owned());
             }
 
             if let Some(step) = *step.clone()
-                && !matches!(
-                    expr_check(variables, consts, &step)?,
-                    TypesCheck::Float | TypesCheck::Number
-                )
+                && !matches!(expr_check(variables, consts, &step)?, TypesCheck::Number)
             {
                 return Err(errors::A15.to_owned());
             }
@@ -355,6 +348,10 @@ fn expr_check(
                 },
                 Token::Plus => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::String),
+                    (TypesCheck::String, TypesCheck::Number) => Ok(TypesCheck::String),
+                    (TypesCheck::String, TypesCheck::Float) => Ok(TypesCheck::String),
+                    (TypesCheck::Number, TypesCheck::String) => Ok(TypesCheck::String),
+                    (TypesCheck::Float, TypesCheck::String) => Ok(TypesCheck::String),
                     (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Float),
                     _ => Err(errors::A16.to_owned()),

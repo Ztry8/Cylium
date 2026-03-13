@@ -33,12 +33,19 @@ impl FileHandler {
     }
 
     pub fn show_error(&self, line_number: usize, error: &str) -> ! {
-        let line = self.ready_file.get(line_number).map(|s| s.as_str()).unwrap_or("<unknown>");
+        let line = self
+            .ready_file
+            .get(line_number)
+            .map(|s| s.as_str())
+            .unwrap_or("<unknown>");
 
         panic!(
             "{}",
             Self::get_error(
-                self.raw_file.iter().position(|x| x == line).unwrap(),
+                self.raw_file
+                    .iter()
+                    .position(|x| x == line)
+                    .unwrap_or(line_number),
                 line,
                 error
             )

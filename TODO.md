@@ -7,8 +7,8 @@
   * [x] Implement `for` loop
 
 * [x] Replace AST interpreter with IR (bytecode) based interpreter
-  * [ ] Implement `if-else` block
-  * [ ] Implement `while` loop
+  * [x] Implement `if-else` block
+  * [x] Implement `while` loop
   * [ ] Implement `for` loop
 
 * [ ] Replace procedures with functions 
