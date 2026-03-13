@@ -248,9 +248,9 @@ fn expr_execute(instruction: &Instruction, stack: &mut Vec<Types>) -> Result<(),
         Instruction::Plus => match (stack.pop(), stack.pop()) {
             (Some(Types::Number(a)), Some(Types::Number(b))) => stack.push(Types::Number(a + b)),
             (Some(Types::Float(a)), Some(Types::Float(b))) => stack.push(Types::Float(a + b)),
-            (Some(Types::String(mut a)), Some(Types::String(b))) => stack.push(Types::String({
-                a.push_str(&b);
-                a
+            (Some(Types::String(a)), Some(Types::String(mut b))) => stack.push(Types::String({
+                b.push_str(&a);
+                b
             })),
             _ => unreachable!(),
         },

@@ -33,7 +33,7 @@ impl FileHandler {
     }
 
     pub fn show_error(&self, line_number: usize, error: &str) -> ! {
-        let line = &self.ready_file[line_number];
+        let line = self.ready_file.get(line_number).map(|s| s.as_str()).unwrap_or("<unknown>");
 
         panic!(
             "{}",

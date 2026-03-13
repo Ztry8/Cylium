@@ -154,7 +154,10 @@ fn main_compile(node: AstKind, instructions: &mut Vec<Instruction>) -> Result<()
             instructions.push(Instruction::Call(name, args.len()));
         }
         AstKind::Assign { name, op, expr } => {
-            instructions.push(Instruction::Load(name.clone()));
+            if op != Token::Assign {
+                instructions.push(Instruction::Load(name.clone()));
+            }
+
             expr_compile(instructions, *expr)?;
 
             let mut make = |inst| {

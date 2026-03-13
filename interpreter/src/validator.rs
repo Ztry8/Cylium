@@ -188,14 +188,16 @@ fn main_check(
             }
         }
         AstKind::For {
+            var_name,
             start,
             end,
             step,
             body,
-            ..
         } => {
+            let start_type = expr_check(variables, consts, start)?;
+
             if !matches!(
-                expr_check(variables, consts, start)?,
+                start_type,
                 TypesCheck::Float | TypesCheck::Number
             ) {
                 return Err(errors::A15.to_owned());
@@ -216,6 +218,8 @@ fn main_check(
             {
                 return Err(errors::A15.to_owned());
             }
+
+            variables.insert(var_name.clone(), (start_type, false));
 
             for node in body {
                 main_check(procs, variables, consts, &node.kind)?;

@@ -74,7 +74,6 @@ fn main() {
                     validator::check_types(&handler, &ast);
 
                     let (program, consts) = bytecode::compile(&handler, ast);
-                    dbg!(&program);
 
                     interpreter::execute(&handler, program, consts);
                 }
