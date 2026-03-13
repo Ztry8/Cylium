@@ -1,8 +1,8 @@
 <div align="center">
   
 # Cylium
-![Commits](https://img.shields.io/github/commit-activity/m/ztry8/cylium.svg)
-[![GitHub last commit](https://img.shields.io/github/last-commit/ztry8/cylium)](https://github.com/ztry8/cylium/commits)
+![Commits](https://img.shields.io/github/commit-activity/m/ztry8/cylium?style=for-the-badge&logo=github)
+![Last Commit](https://img.shields.io/github/last-commit/ztry8/cylium?style=for-the-badge&logo=git)
 
 ## Imperative, strongly typed scripting language
 [Website](https://cylium.site) | [Getting started](https://cylium.site/tutorials) | [Docs](https://cylium.site/docs)
