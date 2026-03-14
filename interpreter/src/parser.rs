@@ -57,19 +57,24 @@ pub enum AstKind {
         name: String,
         op: Token,
         expr: Box<AstKind>,
+        var_type: TypesCheck,     
     },
     BinaryOp {
         left: Box<AstKind>,
         op: Token,
         right: Box<AstKind>,
+        left_type: TypesCheck,     
+        right_type: TypesCheck,   
     },
     UnaryOp {
         op: Token,
         expr: Box<AstKind>,
+        expr_type: TypesCheck,     
     },
     AsOp {
         expr: Box<AstKind>,
         op: Cast,
+        src_type: TypesCheck,     
     },
     Condition {
         expr: Box<AstKind>,
@@ -257,6 +262,7 @@ impl Parser {
                 AstKind::UnaryOp {
                     op,
                     expr: Box::new(expr),
+                    expr_type: TypesCheck::Number,
                 }
             }
             Some(Token::OpenParen) => {
@@ -342,12 +348,15 @@ impl Parser {
                     } else {
                         return Err(errors::A15.to_owned());
                     },
+                    src_type: TypesCheck::Number,
                 };
             } else {
                 left = AstKind::BinaryOp {
                     left: Box::new(left),
                     op: op_tok,
                     right: Box::new(right),
+                    left_type: TypesCheck::Number,
+                    right_type: TypesCheck::Number,
                 };
             }
         }
@@ -403,6 +412,9 @@ impl Parser {
                 }
 
                 self.pos += 1;
+                if self.pos >= self.tokens[self.line].len() {
+                    break;
+                }
             }
 
             let mut body = Vec::new();
@@ -673,6 +685,7 @@ impl Parser {
                             name: receiver,
                             op,
                             expr: Box::new(expr),
+                            var_type: TypesCheck::Number,
                         }
                     ))
                 }

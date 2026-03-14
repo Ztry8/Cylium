@@ -35,7 +35,7 @@ pub const A29: &str = "A29: Expected variable name to delete.";
 pub const A34: &str = "A34: Invalid number.";
 pub const A35: &str = "A35: Cannot convert value to logical type.";
 
-pub const A36: &str = "A36: Cannot convert value to string type.";
+// pub const A36: &str = "A36: Cannot convert value to string type.";
 pub const A37: &str = "A37: Constant declared more than one time.";
 
 pub const A38: &str = "A38: Procedure declared more than one time.";

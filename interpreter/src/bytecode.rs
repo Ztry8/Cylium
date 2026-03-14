@@ -9,7 +9,7 @@ use crate::{
     file_handler::FileHandler,
     lexer::Token,
     parser::{AstKind, AstNode, Cast, ElseBlock},
-    types::{Types, TypesCheck},
+    types::TypesCheck,
 };
 
 #[derive(Debug)]
@@ -28,30 +28,77 @@ pub struct Proc {
 pub enum Instruction {
     StoreConst(String),
     StoreLocal(String),
-    Push(Types),
     Load(String),
-    Neg,
-    Not,
-    Or,
-    And,
-    Equal,
-    NotEqual,
-    Greater,
-    Less,
-    GreaterEqual,
-    LessEqual,
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
-    Mod,
-    CastToString,
-    CastToFloat,
-    CastToNumber,
-    CastToBoolean,
-    Sin,
-    Cos,
-    Sqrt,
+
+    PushInt(i64),
+    PushFloat(f64),
+    PushBool(bool),
+    PushStr(String),
+
+    AddInt,
+    SubInt,
+    MulInt,
+    DivInt,
+    ModInt,
+    NegInt,
+
+    AddFloat,
+    SubFloat,
+    MulFloat,
+    DivFloat,
+    ModFloat,
+    NegFloat,
+    SinFloat,
+    CosFloat,
+    SqrtFloat,
+
+    ConcatStr,
+    ConcatStrInt,
+    ConcatStrFloat,
+    ConcatIntStr,
+    ConcatFloatStr,
+    RepeatStr,
+    RepeatStrRev,
+
+    EqInt,
+    NeInt,
+    GtInt,
+    LtInt,
+    GeInt,
+    LeInt,
+
+    EqFloat,
+    NeFloat,
+    GtFloat,
+    LtFloat,
+    GeFloat,
+    LeFloat,
+
+    EqBool,
+    NeBool,
+    AndBool,
+    OrBool,
+    NotBool,
+
+    EqStr,
+    NeStr,
+    GtStr,
+    LtStr,
+    GeStr,
+    LeStr,
+
+    IntToFloat,
+    IntToBool,
+    IntToStr,
+    FloatToInt,
+    FloatToBool,
+    FloatToStr,
+    BoolToInt,
+    BoolToFloat,
+    BoolToStr,
+    StrToInt,
+    StrToFloat,
+    StrToBool,
 
     Echo,
     Exit(i32),
@@ -142,18 +189,23 @@ fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), S
         AstKind::ProcCall { name, args } => {
             for arg in args.iter().rev() {
                 let inst = match arg {
-                    Token::Ident(name) => Instruction::Load(name.clone()),
-                    Token::NumberValue(value) => Instruction::Push(Types::Number(*value)),
-                    Token::FloatValue(value) => Instruction::Push(Types::Float(*value)),
-                    Token::StringValue(value) => Instruction::Push(Types::String(value.clone())),
-                    Token::BooleanValue(value) => Instruction::Push(Types::Boolean(*value)),
+                    Token::Ident(n) => Instruction::Load(n.clone()),
+                    Token::NumberValue(v) => Instruction::PushInt(*v),
+                    Token::FloatValue(v) => Instruction::PushFloat(*v),
+                    Token::StringValue(v) => Instruction::PushStr(v.clone()),
+                    Token::BooleanValue(v) => Instruction::PushBool(*v),
                     _ => unreachable!(),
                 };
                 push_node(out, inst, line);
             }
             push_node(out, Instruction::Call(name, args.len()), line);
         }
-        AstKind::Assign { name, op, expr } => {
+        AstKind::Assign {
+            name,
+            op,
+            expr,
+            var_type,
+        } => {
             if op != Token::Assign {
                 push_node(out, Instruction::Load(name.clone()), line);
             }
@@ -165,23 +217,45 @@ fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), S
                     push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::PlusAssign => {
-                    push_node(out, Instruction::Plus, line);
+                    let inst = match var_type {
+                        TypesCheck::Float => Instruction::AddFloat,
+                        TypesCheck::String => Instruction::ConcatStr,
+                        _ => Instruction::AddInt,
+                    };
+                    push_node(out, inst, line);
                     push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::MinusAssign => {
-                    push_node(out, Instruction::Minus, line);
+                    let inst = match var_type {
+                        TypesCheck::Float => Instruction::SubFloat,
+                        _ => Instruction::SubInt,
+                    };
+                    push_node(out, inst, line);
                     push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::MultiplyAssign => {
-                    push_node(out, Instruction::Multiply, line);
+                    let inst = match var_type {
+                        TypesCheck::Float => Instruction::MulFloat,
+                        TypesCheck::String => Instruction::RepeatStr,
+                        _ => Instruction::MulInt,
+                    };
+                    push_node(out, inst, line);
                     push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::DivideAssign => {
-                    push_node(out, Instruction::Divide, line);
+                    let inst = match var_type {
+                        TypesCheck::Float => Instruction::DivFloat,
+                        _ => Instruction::DivInt,
+                    };
+                    push_node(out, inst, line);
                     push_node(out, Instruction::StoreLocal(name), line);
                 }
                 Token::ModAssign => {
-                    push_node(out, Instruction::Mod, line);
+                    let inst = match var_type {
+                        TypesCheck::Float => Instruction::ModFloat,
+                        _ => Instruction::ModInt,
+                    };
+                    push_node(out, inst, line);
                     push_node(out, Instruction::StoreLocal(name), line);
                 }
                 _ => unreachable!(),
@@ -216,8 +290,8 @@ fn condition_compile(
     line: usize,
 ) -> Result<(), String> {
     expr_compile(out, expr, line)?;
-
-    let jump_if_false_idx = out.len();
+    let jif_idx = out.len();
+    
     push_node(out, Instruction::JumpIfFalse(0), line);
 
     for node in yes {
@@ -227,36 +301,29 @@ fn condition_compile(
     match no {
         None => {
             let end = out.len();
-            out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(end);
+            out[jif_idx].instruction = Instruction::JumpIfFalse(end);
         }
         Some(ElseBlock::Else(else_body)) => {
             let jump_idx = out.len();
             push_node(out, Instruction::Jump(0), line);
-
             let else_start = out.len();
-            out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(else_start);
-
+            out[jif_idx].instruction = Instruction::JumpIfFalse(else_start);
             for node in else_body {
                 main_compile(node.kind, out, node.line)?;
             }
-
             let end = out.len();
             out[jump_idx].instruction = Instruction::Jump(end);
         }
         Some(ElseBlock::ElseIf(node)) => {
             let jump_idx = out.len();
             push_node(out, Instruction::Jump(0), line);
-
             let elseif_start = out.len();
-            out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(elseif_start);
-
+            out[jif_idx].instruction = Instruction::JumpIfFalse(elseif_start);
             main_compile(node.kind, out, node.line)?;
-
             let end = out.len();
             out[jump_idx].instruction = Instruction::Jump(end);
         }
     }
-
     Ok(())
 }
 
@@ -267,21 +334,15 @@ fn while_compile(
     line: usize,
 ) -> Result<(), String> {
     let loop_start = out.len();
-
     expr_compile(out, expr, line)?;
-
-    let jump_if_false_idx = out.len();
+    let jif_idx = out.len();
     push_node(out, Instruction::JumpIfFalse(0), line);
-
     for node in body {
         main_compile(node.kind, out, node.line)?;
     }
-
     push_node(out, Instruction::Jump(loop_start), line);
-
     let end = out.len();
-    out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(end);
-
+    out[jif_idx].instruction = Instruction::JumpIfFalse(end);
     Ok(())
 }
 
@@ -297,13 +358,27 @@ fn for_compile(
     expr_compile(out, start, line)?;
     push_node(out, Instruction::StoreLocal(var_name.clone()), line);
 
+    let end_var = format!("\x00fe_{}", var_name);
+    expr_compile(out, end, line)?;
+    push_node(out, Instruction::StoreLocal(end_var.clone()), line);
+
+    let step_var = match step {
+        Some(step_expr) => {
+            let sv = format!("\x00fs_{}", var_name);
+            expr_compile(out, step_expr, line)?;
+            push_node(out, Instruction::StoreLocal(sv.clone()), line);
+            Some(sv)
+        }
+        None => None,
+    };
+
     let loop_start = out.len();
 
-    expr_compile(out, end, line)?;
+    push_node(out, Instruction::Load(end_var.clone()), line);
     push_node(out, Instruction::Load(var_name.clone()), line);
-    push_node(out, Instruction::LessEqual, line);
+    push_node(out, Instruction::LeInt, line);
 
-    let jump_if_false_idx = out.len();
+    let jif_idx = out.len();
     push_node(out, Instruction::JumpIfFalse(0), line);
 
     for node in body {
@@ -311,90 +386,173 @@ fn for_compile(
     }
 
     push_node(out, Instruction::Load(var_name.clone()), line);
-    match step {
-        Some(step_expr) => expr_compile(out, step_expr, line)?,
-        None => push_node(out, Instruction::Push(Types::Number(1)), line),
+    match step_var {
+        Some(sv) => push_node(out, Instruction::Load(sv), line),
+        None => push_node(out, Instruction::PushInt(1), line),
     }
-    push_node(out, Instruction::Plus, line);
+    push_node(out, Instruction::AddInt, line);
     push_node(out, Instruction::StoreLocal(var_name), line);
 
     push_node(out, Instruction::Jump(loop_start), line);
-
     let end_idx = out.len();
-    out[jump_if_false_idx].instruction = Instruction::JumpIfFalse(end_idx);
-
+    out[jif_idx].instruction = Instruction::JumpIfFalse(end_idx);
     Ok(())
 }
 
 fn expr_compile(out: &mut Vec<Node>, value: AstKind, line: usize) -> Result<(), String> {
     match value {
-        AstKind::UnaryOp { op, expr } => {
+        AstKind::UnaryOp {
+            op,
+            expr,
+            expr_type,
+        } => {
             expr_compile(out, *expr, line)?;
             let inst = match op {
-                Token::Not => Instruction::Not,
-                Token::Minus => Instruction::Neg,
+                Token::Not => Instruction::NotBool,
+                Token::Minus => match expr_type {
+                    TypesCheck::Float => Instruction::NegFloat,
+                    _ => Instruction::NegInt,
+                },
                 _ => return Err(errors::A15.to_owned()),
             };
             push_node(out, inst, line);
         }
-        AstKind::AsOp { expr, op } => {
+        AstKind::AsOp { expr, op, src_type } => {
             expr_compile(out, *expr, line)?;
-            let inst = match op {
-                Cast::String => Instruction::CastToString,
-                Cast::Number => Instruction::CastToNumber,
-                Cast::Float => Instruction::CastToFloat,
-                Cast::Boolean => Instruction::CastToBoolean,
-                Cast::Sqrt => Instruction::Sqrt,
-                Cast::Sin => Instruction::Sin,
-                Cast::Cos => Instruction::Cos,
-            };
-            push_node(out, inst, line);
+            push_node(out, cast_inst(&op, &src_type), line);
         }
-        AstKind::BinaryOp { left, op, right } => {
+        AstKind::BinaryOp {
+            left,
+            op,
+            right,
+            left_type,
+            right_type,
+        } => {
             expr_compile(out, *right, line)?;
             expr_compile(out, *left, line)?;
-            let inst = match op {
-                Token::Or => Instruction::Or,
-                Token::And => Instruction::And,
-                Token::Equal => Instruction::Equal,
-                Token::NotEqual => Instruction::NotEqual,
-                Token::Greater => Instruction::Greater,
-                Token::Less => Instruction::Less,
-                Token::GreaterEqual => Instruction::GreaterEqual,
-                Token::LessEqual => Instruction::LessEqual,
-                Token::Plus => Instruction::Plus,
-                Token::Minus => Instruction::Minus,
-                Token::Multiply => Instruction::Multiply,
-                Token::Divide => Instruction::Divide,
-                Token::Mod => Instruction::Mod,
-                _ => unreachable!(),
-            };
-            push_node(out, inst, line);
+            push_node(out, binary_op_inst(op, &left_type, &right_type), line);
         }
         AstKind::Ident(name) => push_node(out, Instruction::Load(name), line),
-        AstKind::Number(value) => push_node(out, Instruction::Push(Types::Number(value)), line),
-        AstKind::Float(value) => push_node(out, Instruction::Push(Types::Float(value)), line),
-        AstKind::String(value) => push_node(out, Instruction::Push(Types::String(value)), line),
-        AstKind::Boolean(value) => push_node(out, Instruction::Push(Types::Boolean(value)), line),
+        AstKind::Number(v) => push_node(out, Instruction::PushInt(v), line),
+        AstKind::Float(v) => push_node(out, Instruction::PushFloat(v), line),
+        AstKind::String(v) => push_node(out, Instruction::PushStr(v), line),
+        AstKind::Boolean(v) => push_node(out, Instruction::PushBool(v), line),
         _ => unreachable!(),
     }
-
     Ok(())
 }
 
-fn var_compile(name: String, value: AstKind, is_const: bool) -> Result<Vec<Instruction>, String> {
-    let mut instructions = Vec::new();
+#[inline(always)]
+fn cast_inst(op: &Cast, src: &TypesCheck) -> Instruction {
+    match op {
+        Cast::String => match src {
+            TypesCheck::Number => Instruction::IntToStr,
+            TypesCheck::Float => Instruction::FloatToStr,
+            TypesCheck::Boolean => Instruction::BoolToStr,
+            TypesCheck::String => unreachable!(),
+        },
+        Cast::Number => match src {
+            TypesCheck::Float => Instruction::FloatToInt,
+            TypesCheck::Boolean => Instruction::BoolToInt,
+            TypesCheck::String => Instruction::StrToInt,
+            TypesCheck::Number => unreachable!(),
+        },
+        Cast::Float => match src {
+            TypesCheck::Number => Instruction::IntToFloat,
+            TypesCheck::Boolean => Instruction::BoolToFloat,
+            TypesCheck::String => Instruction::StrToFloat,
+            TypesCheck::Float => unreachable!(),
+        },
+        Cast::Boolean => match src {
+            TypesCheck::Number => Instruction::IntToBool,
+            TypesCheck::Float => Instruction::FloatToBool,
+            TypesCheck::String => Instruction::StrToBool,
+            TypesCheck::Boolean => unreachable!(),
+        },
+        Cast::Sin => Instruction::SinFloat,
+        Cast::Cos => Instruction::CosFloat,
+        Cast::Sqrt => Instruction::SqrtFloat,
+    }
+}
 
+#[inline(always)]
+fn binary_op_inst(op: Token, lt: &TypesCheck, rt: &TypesCheck) -> Instruction {
+    match op {
+        Token::Or => Instruction::OrBool,
+        Token::And => Instruction::AndBool,
+        Token::Plus => match (lt, rt) {
+            (TypesCheck::Number, TypesCheck::Number) => Instruction::AddInt,
+            (TypesCheck::Float, TypesCheck::Float) => Instruction::AddFloat,
+            (TypesCheck::String, TypesCheck::String) => Instruction::ConcatStr,
+            (TypesCheck::String, TypesCheck::Number) => Instruction::ConcatStrInt,
+            (TypesCheck::String, TypesCheck::Float) => Instruction::ConcatStrFloat,
+            (TypesCheck::Number, TypesCheck::String) => Instruction::ConcatIntStr,
+            (TypesCheck::Float, TypesCheck::String) => Instruction::ConcatFloatStr,
+            _ => unreachable!(),
+        },
+        Token::Minus => match lt {
+            TypesCheck::Float => Instruction::SubFloat,
+            _ => Instruction::SubInt,
+        },
+        Token::Multiply => match (lt, rt) {
+            (TypesCheck::Number, TypesCheck::Number) => Instruction::MulInt,
+            (TypesCheck::Float, TypesCheck::Float) => Instruction::MulFloat,
+            (TypesCheck::String, TypesCheck::Number) => Instruction::RepeatStr,
+            (TypesCheck::Number, TypesCheck::String) => Instruction::RepeatStrRev,
+            _ => unreachable!(),
+        },
+        Token::Divide => match lt {
+            TypesCheck::Float => Instruction::DivFloat,
+            _ => Instruction::DivInt,
+        },
+        Token::Mod => match lt {
+            TypesCheck::Float => Instruction::ModFloat,
+            _ => Instruction::ModInt,
+        },
+        Token::Equal => match lt {
+            TypesCheck::Number => Instruction::EqInt,
+            TypesCheck::Float => Instruction::EqFloat,
+            TypesCheck::String => Instruction::EqStr,
+            TypesCheck::Boolean => Instruction::EqBool,
+        },
+        Token::NotEqual => match lt {
+            TypesCheck::Number => Instruction::NeInt,
+            TypesCheck::Float => Instruction::NeFloat,
+            TypesCheck::String => Instruction::NeStr,
+            TypesCheck::Boolean => Instruction::NeBool,
+        },
+        Token::Greater => match lt {
+            TypesCheck::Float => Instruction::GtFloat,
+            TypesCheck::String => Instruction::GtStr,
+            _ => Instruction::GtInt,
+        },
+        Token::Less => match lt {
+            TypesCheck::Float => Instruction::LtFloat,
+            TypesCheck::String => Instruction::LtStr,
+            _ => Instruction::LtInt,
+        },
+        Token::GreaterEqual => match lt {
+            TypesCheck::Float => Instruction::GeFloat,
+            TypesCheck::String => Instruction::GeStr,
+            _ => Instruction::GeInt,
+        },
+        Token::LessEqual => match lt {
+            TypesCheck::Float => Instruction::LeFloat,
+            TypesCheck::String => Instruction::LeStr,
+            _ => Instruction::LeInt,
+        },
+        _ => unreachable!(),
+    }
+}
+
+fn var_compile(name: String, value: AstKind, is_const: bool) -> Result<Vec<Instruction>, String> {
     let mut temp: Vec<Node> = Vec::new();
     expr_compile(&mut temp, value, 0)?;
-
-    instructions.extend(temp.into_iter().map(|n| n.instruction));
-
+    let mut instructions: Vec<Instruction> = temp.into_iter().map(|n| n.instruction).collect();
     if is_const {
         instructions.push(Instruction::StoreConst(name));
     } else {
         instructions.push(Instruction::StoreLocal(name));
     }
-
     Ok(instructions)
 }

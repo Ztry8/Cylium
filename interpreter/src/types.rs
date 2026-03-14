@@ -8,8 +8,12 @@ pub enum TypesCheck {
 
 #[derive(Debug, Clone)]
 pub enum Types {
-    // Vector(Vec<Types>),
+    Scalar(Scalar),
     String(String),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Scalar {
     Boolean(bool),
     Number(i64),
     Float(f64),

@@ -11,3 +11,5 @@ interpreter/Cargo.lock
 
 editor/*.cyl
 editor/cylium
+
+benchmarks/build

@@ -1,0 +1,15 @@
+proc main
+    number n = 1000000
+
+    number a = 0
+    number b = 1
+
+    for i from 0 to n 
+        number next = a + b 
+
+        a = b
+        b = next
+    endfor
+
+    exit 0
+end

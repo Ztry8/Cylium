@@ -110,6 +110,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
             '{' => tokens.push(Token::OpenBrace),
             '}' => tokens.push(Token::CloseBrace),
             ',' => tokens.push(Token::Comma),
+            ':' => tokens.push(Token::Colon),
 
             '+' => tokens.push(check(&chars, &mut i, Token::Plus, Token::PlusAssign)),
             '-' => tokens.push(check(&chars, &mut i, Token::Minus, Token::MinusAssign)),

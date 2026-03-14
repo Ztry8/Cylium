@@ -69,9 +69,9 @@ fn main() {
                     let tokens = lexer::tokenize_file(&handler);
 
                     let mut parser = Parser::new(tokens);
-                    let ast = parser.start(&handler);
+                    let mut ast = parser.start(&handler);
 
-                    validator::check_types(&handler, &ast);
+                    validator::check_types(&handler, &mut ast);
 
                     let (program, consts) = bytecode::compile(&handler, ast);
 

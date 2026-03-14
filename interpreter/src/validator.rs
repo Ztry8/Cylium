@@ -12,11 +12,11 @@ use crate::{
     types::TypesCheck,
 };
 
-pub fn check_types(handler: &FileHandler, ast: &[AstNode]) {
+pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     let mut consts = HashMap::new();
     let mut procs = HashMap::new();
 
-    for node in ast {
+    for node in ast.iter() {
         if let AstKind::Proc { name, args, .. } = &node.kind
             && procs.insert(name.clone(), args.clone()).is_some()
         {
@@ -24,8 +24,8 @@ pub fn check_types(handler: &FileHandler, ast: &[AstNode]) {
         }
     }
 
-    for node in ast {
-        match &node.kind {
+    for node in ast.iter_mut() {
+        match &mut node.kind {
             AstKind::VarDecl { name, type_, .. } => {
                 if consts.insert(name.clone(), type_.clone()).is_some() {
                     handler.show_error(node.line, errors::A37)
@@ -34,12 +34,12 @@ pub fn check_types(handler: &FileHandler, ast: &[AstNode]) {
             AstKind::Proc { body, args, .. } => {
                 let mut variables = HashMap::new();
 
-                for arg in args {
+                for arg in args.iter() {
                     variables.insert(arg.0.clone(), (arg.1.clone(), false));
                 }
 
-                for node in body {
-                    if let Err(e) = main_check(&procs, &mut variables, &consts, &node.kind) {
+                for node in body.iter_mut() {
+                    if let Err(e) = main_check(&procs, &mut variables, &consts, &mut node.kind) {
                         handler.show_error(node.line, &e);
                     }
                 }
@@ -54,7 +54,7 @@ fn main_check(
     procs: &HashMap<String, Vec<(String, TypesCheck)>>,
     variables: &mut HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
-    node: &AstKind,
+    node: &mut AstKind,
 ) -> Result<(), String> {
     match node {
         AstKind::Delete(name) => {
@@ -72,7 +72,7 @@ fn main_check(
             value,
             is_const,
         } => {
-            let real_type = expr_check(variables, consts, value)?;
+            let real_type = expr_annotate(variables, consts, value)?;
 
             if *type_ == real_type {
                 if variables
@@ -85,18 +85,19 @@ fn main_check(
                 return Err(errors::A43.to_owned());
             }
         }
-        AstKind::Assign { name, op, expr } => {
+        AstKind::Assign { name, op, expr, var_type } => {
             if let Some((type_, is_const)) = variables.get(name) {
+                *var_type = type_.clone();
                 if !*is_const {
-                    let value = expr_check(variables, consts, expr)?;
+                    let value = expr_annotate(variables, consts, expr)?;
 
                     match op {
                         Token::Assign => {
-                            if *type_ != value {
+                            if *var_type != value {
                                 return Err(errors::A43.to_owned());
                             }
                         }
-                        Token::PlusAssign => match (type_, value) {
+                        Token::PlusAssign => match (var_type, value) {
                             (TypesCheck::String, TypesCheck::String) => {}
                             (TypesCheck::String, TypesCheck::Number) => {}
                             (TypesCheck::String, TypesCheck::Float) => {}
@@ -104,23 +105,23 @@ fn main_check(
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
-                        Token::MinusAssign => match (type_, value) {
+                        Token::MinusAssign => match (var_type, value) {
                             (TypesCheck::Number, TypesCheck::Number) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
-                        Token::MultiplyAssign => match (type_, value) {
+                        Token::MultiplyAssign => match (var_type, value) {
                             (TypesCheck::String, TypesCheck::Number) => {}
                             (TypesCheck::Number, TypesCheck::Number) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
-                        Token::DivideAssign => match (type_, value) {
+                        Token::DivideAssign => match (var_type, value) {
                             (TypesCheck::Number, TypesCheck::Number) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
-                        Token::ModAssign => match (type_, value) {
+                        Token::ModAssign => match (var_type, value) {
                             (TypesCheck::Number, TypesCheck::Number) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
@@ -160,18 +161,18 @@ fn main_check(
             }
         }
         AstKind::Condition { expr, yes, no } => {
-            if expr_check(variables, consts, expr)? == TypesCheck::Boolean {
-                for node in yes {
-                    main_check(procs, variables, consts, &node.kind)?;
+            if expr_annotate(variables, consts, expr)? == TypesCheck::Boolean {
+                for node in yes.iter_mut() {
+                    main_check(procs, variables, consts, &mut node.kind)?;
                 }
 
                 match no {
                     Some(ElseBlock::ElseIf(node)) => {
-                        main_check(procs, variables, consts, &node.kind)?
+                        main_check(procs, variables, consts, &mut node.kind)?
                     }
                     Some(ElseBlock::Else(nodes)) => {
-                        for node in nodes {
-                            main_check(procs, variables, consts, &node.kind)?;
+                        for node in nodes.iter_mut() {
+                            main_check(procs, variables, consts, &mut node.kind)?;
                         }
                     }
                     None => {}
@@ -181,9 +182,9 @@ fn main_check(
             }
         }
         AstKind::While { expr, body } => {
-            if expr_check(variables, consts, expr)? == TypesCheck::Boolean {
-                for node in body {
-                    main_check(procs, variables, consts, &node.kind)?;
+            if expr_annotate(variables, consts, expr)? == TypesCheck::Boolean {
+                for node in body.iter_mut() {
+                    main_check(procs, variables, consts, &mut node.kind)?;
                 }
             } else {
                 return Err(errors::A15.to_owned());
@@ -196,32 +197,59 @@ fn main_check(
             step,
             body,
         } => {
-            let start_type = expr_check(variables, consts, start)?;
+            let start_type = expr_annotate(variables, consts, start)?;
 
             if !matches!(start_type, TypesCheck::Number) {
                 return Err(errors::A15.to_owned());
             }
 
-            if !matches!(expr_check(variables, consts, end)?, TypesCheck::Number) {
+            if !matches!(expr_annotate(variables, consts, end)?, TypesCheck::Number) {
                 return Err(errors::A15.to_owned());
             }
 
-            if let Some(step) = *step.clone()
-                && !matches!(expr_check(variables, consts, &step)?, TypesCheck::Number)
+            if let Some(step) = step.as_mut()
+                && !matches!(expr_annotate(variables, consts, step)?, TypesCheck::Number)
             {
                 return Err(errors::A15.to_owned());
             }
 
             variables.insert(var_name.clone(), (start_type, false));
 
-            for node in body {
-                main_check(procs, variables, consts, &node.kind)?;
+            for node in body.iter_mut() {
+                main_check(procs, variables, consts, &mut node.kind)?;
             }
         }
         _ => {}
     }
 
     Ok(())
+}
+
+fn expr_annotate(
+    variables: &HashMap<String, (TypesCheck, bool)>,
+    consts: &HashMap<String, TypesCheck>,
+    node: &mut AstKind,
+) -> Result<TypesCheck, String> {
+    match node {
+        AstKind::UnaryOp { expr, expr_type, .. } => {
+            let t = expr_annotate(variables, consts, expr)?;
+            *expr_type = t;
+            expr_check(variables, consts, node)
+        }
+        AstKind::AsOp { expr, src_type, .. } => {
+            let t = expr_annotate(variables, consts, expr)?;
+            *src_type = t;
+            expr_check(variables, consts, node)
+        }
+        AstKind::BinaryOp { left, right, left_type, right_type, .. } => {
+            let lt = expr_annotate(variables, consts, left)?;
+            let rt = expr_annotate(variables, consts, right)?;
+            *left_type = lt;
+            *right_type = rt;
+            expr_check(variables, consts, node)
+        }
+        _ => expr_check(variables, consts, node),
+    }
 }
 
 fn expr_check(
@@ -245,7 +273,7 @@ fn expr_check(
                 Err(errors::A03.to_owned())
             }
         }
-        AstKind::UnaryOp { op, expr } => {
+        AstKind::UnaryOp { op, expr, .. } => {
             let value = expr_check(variables, consts, expr)?;
 
             match op {
@@ -261,7 +289,7 @@ fn expr_check(
                 _ => Err(errors::A15.to_owned()),
             }
         }
-        AstKind::AsOp { expr, op } => {
+        AstKind::AsOp { expr, op, .. } => {
             let value = expr_check(variables, consts, expr)?;
 
             match op {
@@ -295,7 +323,7 @@ fn expr_check(
                 },
             }
         }
-        AstKind::BinaryOp { left, op, right } => {
+        AstKind::BinaryOp { left, op, right, .. } => {
             let left = expr_check(variables, consts, left)?;
             let right = expr_check(variables, consts, right)?;
 

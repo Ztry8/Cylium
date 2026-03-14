@@ -9,7 +9,7 @@
 * [x] Replace AST interpreter with IR (bytecode) based interpreter
   * [x] Implement `if-else` block
   * [x] Implement `while` loop
-  * [ ] Implement `for` loop
+  * [x] Implement `for` loop
 
 * [ ] Replace procedures with functions 
 * [ ] Add vectors type
