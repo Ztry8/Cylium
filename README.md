@@ -59,8 +59,7 @@ The chart above compares the execution time required to compute the **first one 
 
 The benchmark demonstrates the performance characteristics of **Cylium** compared to both low-level and high-level languages.
 
-Despite being an interpreted language, **Cylium significantly outperforms Python in this benchmark**    
-and remains within a reasonable distance of other lightweight scripting environments.
+Despite being an interpreted language, **Cylium significantly outperforms Python in this benchmark** and remains within a reasonable distance of other lightweight scripting environments.
 
 *Benchmark was run on an **8-core 2.8 GHz processor***  
 *All benchmark implementations are available in the `benchmarks/` directory.*  

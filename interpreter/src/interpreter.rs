@@ -157,7 +157,11 @@ fn dispatch(
 
         Instruction::StoreLocal(name) => {
             let val = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
-            scope.declare(name.to_string(), val, false);
+            if let Some(slot) = scope.get_mut(name) {
+                *slot = val;
+            } else {
+                scope.declare(name.to_string(), val, false);
+            }
         }
 
         Instruction::StoreConst(name) => {
@@ -196,6 +200,35 @@ fn dispatch(
         Instruction::PushBool(v) => stack.push(bl(*v)),
         Instruction::PushStr(v) => stack.push(str_(v.clone())),
 
+        Instruction::AndInt => {
+            let a = pop_int(stack);
+            let b = pop_int(stack);
+            stack.push(int(a & b));
+        }
+        Instruction::OrInt => {
+            let a = pop_int(stack);
+            let b = pop_int(stack);
+            stack.push(int(a | b));
+        }
+        Instruction::XorInt => {
+            let a = pop_int(stack);
+            let b = pop_int(stack);
+            stack.push(int(a ^ b));
+        }
+        Instruction::NotInt => {
+            let a = pop_int(stack);
+            stack.push(int(!a));
+        }
+        Instruction::RightInt => {
+            let a = pop_int(stack);
+            let b = pop_int(stack);
+            stack.push(int(a >> b));
+        }
+        Instruction::LeftInt => {
+            let a = pop_int(stack);
+            let b = pop_int(stack);
+            stack.push(int(a << b));
+        }
         Instruction::AddInt => {
             let a = pop_int(stack);
             let b = pop_int(stack);

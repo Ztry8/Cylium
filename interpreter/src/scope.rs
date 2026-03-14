@@ -32,6 +32,15 @@ impl Scope {
     }
 
     #[inline(always)]
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut Types> {
+        self.vars
+            .iter_mut()
+            .rev()
+            .find(|(n, _, _)| n == name)
+            .map(|(_, v, _)| v)
+    }
+
+    #[inline(always)]
     pub fn get<'a>(&'a self, consts: &'a Self, name: &str) -> Option<(&'a Types, &'a bool)> {
         self.vars
             .iter()

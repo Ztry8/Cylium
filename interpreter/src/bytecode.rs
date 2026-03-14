@@ -42,6 +42,13 @@ pub enum Instruction {
     ModInt,
     NegInt,
 
+    AndInt,
+    OrInt,
+    XorInt,
+    NotInt,
+    RightInt,
+    LeftInt,
+
     AddFloat,
     SubFloat,
     MulFloat,
@@ -258,6 +265,46 @@ fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), S
                     push_node(out, inst, line);
                     push_node(out, Instruction::StoreLocal(name), line);
                 }
+                Token::BitAndAssign => {
+                    let inst = match var_type {
+                        TypesCheck::Number => Instruction::AndInt,
+                        _ => unreachable!(),
+                    };
+                    push_node(out, inst, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
+                }
+                Token::BitOrAssign => {
+                    let inst = match var_type {
+                        TypesCheck::Number => Instruction::OrInt,
+                        _ => unreachable!(),
+                    };
+                    push_node(out, inst, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
+                }
+                Token::BitXorAssign => {
+                    let inst = match var_type {
+                        TypesCheck::Number => Instruction::XorInt,
+                        _ => unreachable!(),
+                    };
+                    push_node(out, inst, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
+                }
+                Token::BitRightAssign => {
+                    let inst = match var_type {
+                        TypesCheck::Number => Instruction::RightInt,
+                        _ => unreachable!(),
+                    };
+                    push_node(out, inst, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
+                }
+                Token::BitLeftAssign => {
+                    let inst = match var_type {
+                        TypesCheck::Number => Instruction::LeftInt,
+                        _ => unreachable!(),
+                    };
+                    push_node(out, inst, line);
+                    push_node(out, Instruction::StoreLocal(name), line);
+                }
                 _ => unreachable!(),
             }
         }
@@ -291,7 +338,7 @@ fn condition_compile(
 ) -> Result<(), String> {
     expr_compile(out, expr, line)?;
     let jif_idx = out.len();
-    
+
     push_node(out, Instruction::JumpIfFalse(0), line);
 
     for node in yes {
@@ -409,6 +456,7 @@ fn expr_compile(out: &mut Vec<Node>, value: AstKind, line: usize) -> Result<(), 
             expr_compile(out, *expr, line)?;
             let inst = match op {
                 Token::Not => Instruction::NotBool,
+                Token::BitNot => Instruction::NotInt,
                 Token::Minus => match expr_type {
                     TypesCheck::Float => Instruction::NegFloat,
                     _ => Instruction::NegInt,
@@ -540,6 +588,26 @@ fn binary_op_inst(op: Token, lt: &TypesCheck, rt: &TypesCheck) -> Instruction {
             TypesCheck::Float => Instruction::LeFloat,
             TypesCheck::String => Instruction::LeStr,
             _ => Instruction::LeInt,
+        },
+        Token::BitAnd => match lt {
+            TypesCheck::Number => Instruction::AndInt,
+            _ => unreachable!(),
+        },
+        Token::BitOr => match lt {
+            TypesCheck::Number => Instruction::OrInt,
+            _ => unreachable!(),
+        },
+        Token::BitXor => match lt {
+            TypesCheck::Number => Instruction::XorInt,
+            _ => unreachable!(),
+        },
+        Token::BitRight => match lt {
+            TypesCheck::Number => Instruction::RightInt,
+            _ => unreachable!(),
+        },
+        Token::BitLeft => match lt {
+            TypesCheck::Number => Instruction::LeftInt,
+            _ => unreachable!(),
         },
         _ => unreachable!(),
     }

@@ -57,6 +57,20 @@ pub enum Token {
     Or,           // or
     Not,          // not
 
+    BitAnd,   // &
+    BitOr,    // |
+    BitXor,   // ^
+    BitNot,   // ~
+    BitRight, // >>
+    BitLeft,  // <<
+
+    BitAndAssign,   // &=
+    BitOrAssign,    // |=
+    BitXorAssign,   // ^=
+    BitNotAssign,   // ~=
+    BitRightAssign, // >>=
+    BitLeftAssign,  // <<=
+
     OpenParen,    // (
     CloseParen,   // )
     OpenBracket,  // [
@@ -82,8 +96,27 @@ pub fn tokenize_file(handler: &FileHandler) -> Vec<Vec<Token>> {
     tokens
 }
 
-fn check(chars: &[char], i: &mut usize, single: Token, double: Token) -> Token {
-    if *i + 1 < chars.len() && chars[*i + 1] == '=' {
+fn check(
+    chars: &[char],
+    i: &mut usize,
+    single: Token,
+    double: Token,
+    triple: Option<(Token, Token)>,
+) -> Token {
+    if *i + 2 < chars.len()
+        && chars[*i + 1] == chars[*i]
+        && chars[*i + 2] == '='
+        && let Some((triple_assign, _)) = triple.clone()
+    {
+        *i += 2;
+        triple_assign
+    } else if *i + 1 < chars.len()
+        && chars[*i + 1] == chars[*i]
+        && let Some((_, triple_op)) = triple
+    {
+        *i += 1;
+        triple_op
+    } else if *i + 1 < chars.len() && chars[*i + 1] == '=' {
         *i += 1;
         double
     } else {
@@ -112,19 +145,80 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
             ',' => tokens.push(Token::Comma),
             ':' => tokens.push(Token::Colon),
 
-            '+' => tokens.push(check(&chars, &mut i, Token::Plus, Token::PlusAssign)),
-            '-' => tokens.push(check(&chars, &mut i, Token::Minus, Token::MinusAssign)),
-            '/' => tokens.push(check(&chars, &mut i, Token::Divide, Token::DivideAssign)),
-            '%' => tokens.push(check(&chars, &mut i, Token::Mod, Token::ModAssign)),
-            '=' => tokens.push(check(&chars, &mut i, Token::Assign, Token::Equal)),
-            '>' => tokens.push(check(&chars, &mut i, Token::Greater, Token::GreaterEqual)),
-            '<' => tokens.push(check(&chars, &mut i, Token::Less, Token::LessEqual)),
+            '+' => tokens.push(check(&chars, &mut i, Token::Plus, Token::PlusAssign, None)),
+            '-' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::Minus,
+                Token::MinusAssign,
+                None,
+            )),
+
+            '/' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::Divide,
+                Token::DivideAssign,
+                None,
+            )),
+
+            '%' => tokens.push(check(&chars, &mut i, Token::Mod, Token::ModAssign, None)),
+            '=' => tokens.push(check(&chars, &mut i, Token::Assign, Token::Equal, None)),
+
+            '&' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::BitAnd,
+                Token::BitAndAssign,
+                None,
+            )),
+
+            '|' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::BitOr,
+                Token::BitOrAssign,
+                None,
+            )),
+
+            '^' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::BitXor,
+                Token::BitXorAssign,
+                None,
+            )),
+
+            '~' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::BitNot,
+                Token::BitNotAssign,
+                None,
+            )),
+
+            '>' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::Greater,
+                Token::GreaterEqual,
+                Some((Token::BitRightAssign, Token::BitRight)),
+            )),
+
+            '<' => tokens.push(check(
+                &chars,
+                &mut i,
+                Token::Less,
+                Token::LessEqual,
+                Some((Token::BitLeftAssign, Token::BitLeft)),
+            )),
 
             '*' => tokens.push(check(
                 &chars,
                 &mut i,
                 Token::Multiply,
                 Token::MultiplyAssign,
+                None,
             )),
 
             '!' => {
@@ -154,7 +248,9 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
             _ => {
                 if chars[i].is_ascii_digit() {
                     let mut num = String::new();
-                    while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                    while i < chars.len()
+                        && (chars[i].is_ascii_digit() || chars[i] == '.' || chars[i] == 'b')
+                    {
                         num.push(chars[i]);
                         i += 1;
                     }
@@ -165,6 +261,10 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                         tokens.push(Token::NumberValue(number));
                     } else if let Ok(float) = num.parse::<f64>() {
                         tokens.push(Token::FloatValue(float));
+                    } else if let Some(binary_str) = num.strip_prefix("0b")
+                        && let Some(binary_num) = i64::from_str_radix(binary_str, 2).ok()
+                    {
+                        tokens.push(Token::NumberValue(binary_num));
                     } else {
                         return Err(errors::A34.to_owned());
                     }

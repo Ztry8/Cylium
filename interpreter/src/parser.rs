@@ -57,24 +57,24 @@ pub enum AstKind {
         name: String,
         op: Token,
         expr: Box<AstKind>,
-        var_type: TypesCheck,     
+        var_type: TypesCheck,
     },
     BinaryOp {
         left: Box<AstKind>,
         op: Token,
         right: Box<AstKind>,
-        left_type: TypesCheck,     
-        right_type: TypesCheck,   
+        left_type: TypesCheck,
+        right_type: TypesCheck,
     },
     UnaryOp {
         op: Token,
         expr: Box<AstKind>,
-        expr_type: TypesCheck,     
+        expr_type: TypesCheck,
     },
     AsOp {
         expr: Box<AstKind>,
         op: Cast,
-        src_type: TypesCheck,     
+        src_type: TypesCheck,
     },
     Condition {
         expr: Box<AstKind>,
@@ -253,7 +253,7 @@ impl Parser {
 
     fn parse_expr(&mut self, min_prec: u8) -> Result<AstKind, String> {
         let mut left = match self.current_token().cloned() {
-            Some(Token::Minus) | Some(Token::Not) => {
+            Some(Token::Minus) | Some(Token::Not) | Some(Token::BitNot) => {
                 let op = self.current_token().unwrap().clone();
 
                 self.pos += 1;
@@ -377,6 +377,9 @@ impl Parser {
             Token::Plus | Token::Minus => Some(4),
             Token::Multiply | Token::Divide | Token::Mod => Some(5),
             Token::As => Some(7),
+            Token::BitAnd | Token::BitOr | Token::BitXor | Token::BitRight | Token::BitLeft => {
+                Some(8)
+            }
             _ => None,
         }
     }
@@ -668,7 +671,12 @@ impl Parser {
                 | Token::MinusAssign
                 | Token::MultiplyAssign
                 | Token::DivideAssign
-                | Token::ModAssign => {
+                | Token::ModAssign
+                | Token::BitAndAssign
+                | Token::BitOrAssign
+                | Token::BitXorAssign
+                | Token::BitRightAssign
+                | Token::BitLeftAssign => {
                     self.pos += 1;
 
                     let op = self

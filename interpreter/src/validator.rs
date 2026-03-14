@@ -16,6 +16,9 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     let mut consts = HashMap::new();
     let mut procs = HashMap::new();
 
+    consts.insert("PI".to_owned(), TypesCheck::Float);
+    consts.insert("E".to_owned(), TypesCheck::Float);
+
     for node in ast.iter() {
         if let AstKind::Proc { name, args, .. } = &node.kind
             && procs.insert(name.clone(), args.clone()).is_some()
@@ -85,7 +88,12 @@ fn main_check(
                 return Err(errors::A43.to_owned());
             }
         }
-        AstKind::Assign { name, op, expr, var_type } => {
+        AstKind::Assign {
+            name,
+            op,
+            expr,
+            var_type,
+        } => {
             if let Some((type_, is_const)) = variables.get(name) {
                 *var_type = type_.clone();
                 if !*is_const {
@@ -122,6 +130,26 @@ fn main_check(
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::ModAssign => match (var_type, value) {
+                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            _ => return Err(errors::A16.to_owned()),
+                        },
+                        Token::BitAndAssign => match (var_type, value) {
+                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            _ => return Err(errors::A16.to_owned()),
+                        },
+                        Token::BitOrAssign => match (var_type, value) {
+                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            _ => return Err(errors::A16.to_owned()),
+                        },
+                        Token::BitXorAssign => match (var_type, value) {
+                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            _ => return Err(errors::A16.to_owned()),
+                        },
+                        Token::BitRightAssign => match (var_type, value) {
+                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            _ => return Err(errors::A16.to_owned()),
+                        },
+                        Token::BitLeftAssign => match (var_type, value) {
                             (TypesCheck::Number, TypesCheck::Number) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
@@ -219,6 +247,9 @@ fn main_check(
                 main_check(procs, variables, consts, &mut node.kind)?;
             }
         }
+        AstKind::Echo(expr) => {
+            expr_annotate(variables, consts, expr)?;
+        }
         _ => {}
     }
 
@@ -231,7 +262,9 @@ fn expr_annotate(
     node: &mut AstKind,
 ) -> Result<TypesCheck, String> {
     match node {
-        AstKind::UnaryOp { expr, expr_type, .. } => {
+        AstKind::UnaryOp {
+            expr, expr_type, ..
+        } => {
             let t = expr_annotate(variables, consts, expr)?;
             *expr_type = t;
             expr_check(variables, consts, node)
@@ -241,7 +274,13 @@ fn expr_annotate(
             *src_type = t;
             expr_check(variables, consts, node)
         }
-        AstKind::BinaryOp { left, right, left_type, right_type, .. } => {
+        AstKind::BinaryOp {
+            left,
+            right,
+            left_type,
+            right_type,
+            ..
+        } => {
             let lt = expr_annotate(variables, consts, left)?;
             let rt = expr_annotate(variables, consts, right)?;
             *left_type = lt;
@@ -280,6 +319,10 @@ fn expr_check(
                 Token::Not => match value {
                     TypesCheck::Boolean => Ok(TypesCheck::Boolean),
                     _ => Err(errors::A39.to_owned()),
+                },
+                Token::BitNot => match value {
+                    TypesCheck::Number => Ok(TypesCheck::Number),
+                    _ => Err(errors::A16.to_owned()),
                 },
                 Token::Minus => match value {
                     TypesCheck::Number => Ok(TypesCheck::Number),
@@ -323,7 +366,9 @@ fn expr_check(
                 },
             }
         }
-        AstKind::BinaryOp { left, op, right, .. } => {
+        AstKind::BinaryOp {
+            left, op, right, ..
+        } => {
             let left = expr_check(variables, consts, left)?;
             let right = expr_check(variables, consts, right)?;
 
@@ -405,6 +450,27 @@ fn expr_check(
                     (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
                     _ => Err(errors::A16.to_owned()),
                 },
+                Token::BitAnd => match (left, right) {
+                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    _ => Err(errors::A16.to_owned()),
+                },
+                Token::BitOr => match (left, right) {
+                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    _ => Err(errors::A16.to_owned()),
+                },
+                Token::BitXor => match (left, right) {
+                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    _ => Err(errors::A16.to_owned()),
+                },
+                Token::BitRight => match (left, right) {
+                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    _ => Err(errors::A16.to_owned()),
+                },
+                Token::BitLeft => match (left, right) {
+                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    _ => Err(errors::A16.to_owned()),
+                },
+
                 _ => unreachable!(),
             }
         }

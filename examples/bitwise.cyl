@@ -1,0 +1,14 @@
+# Bitwise operators demonstration in Cylium
+
+proc main
+    number a = input as number
+    number b = input as number
+    
+    echo "AND: " + (a & b)
+    echo "OR: " + (a | b)
+    echo "XOR: " + (a ^ b)
+    echo "Left Shift: "  + (a << 2)
+    echo "Right Shift: " + (a >> 2)
+    
+    exit 0
+end
