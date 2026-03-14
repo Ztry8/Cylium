@@ -1,8 +1,8 @@
 <div align="center">
   
 # Cylium
-![Commits](https://img.shields.io/github/commit-activity/m/ztry8/cylium?style=for-the-badge&logo=github)
-![Last Commit](https://img.shields.io/github/last-commit/ztry8/cylium?style=for-the-badge&logo=git)
+![Commits](https://img.shields.io/github/commit-activity/m/ztry8/cylium?style=flat&logo=github)
+![Last Commit](https://img.shields.io/github/last-commit/ztry8/cylium?style=flat&logo=git)
 
 ## Imperative, strongly typed scripting language
 [Website](https://cylium.site) | [Getting started](https://cylium.site/tutorials) | [Docs](https://cylium.site/docs)
@@ -44,10 +44,34 @@ This is the official and primary repository of the Cylium programming language.
 It includes the full interpreter source code and all development-related resources.    
 Documentation and tutorials are available on the [official website](https://cylium.site).
 
+### Performance
+
+![graph](assets/graph.png)
+
+The chart above compares the execution time required to compute the **first one million Fibonacci numbers** using different programming languages.
+
+| Language | Time (ms) | About |
+|--------|------|--------|
+| C++ | ~3 | Represents highly optimized compiled native performance |
+| Cylium | ~366 | Runs through an interpreter but still maintains relatively strong performance |
+| Lua | ~100 | A well-known lightweight scripting language used in embedded systems and games |
+| Python | ~15628 | A general-purpose interpreted language with relatively high runtime overhead |
+
+The benchmark demonstrates the performance characteristics of **Cylium** compared to both low-level and high-level languages.
+
+Despite being an interpreted language, **Cylium significantly outperforms Python in this benchmark**    
+and remains within a reasonable distance of other lightweight scripting environments.
+
+*Benchmark was run on an **8-core 2.8 GHz processor***  
+*All benchmark implementations are available in the `benchmarks/` directory.*  
+*The `bench.sh` script compiles and runs each implementation and reports the average execution time across **5 runs**.*  
+*The benchmark is intended to provide a **rough performance comparison**, not a definitive measurement.*
+
 ### Compilation from Source
 
 You can compile the latest version of **Cylium** from source by following the steps below.  
-*(Precompiled binaries for stable releases are also available for download [here](https://cylium.site/)).*
+*(Precompiled binaries for stable releases are also available for download [here](https://cylium.site/)).*    
+*(Unless you know what are you doing, it is better to use stable release).*
 
 1. **Install Rust**  
    Follow the instructions at [https://rustup.rs](https://rustup.rs) to install Rust and Cargo.
