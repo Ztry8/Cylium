@@ -50,7 +50,7 @@ fn main() {
                 );
 
                 println!(
-                    "License:\n    This software is licensed under the Apache-2.0 License.\n    https://https://apache.org/licenses/\n"
+                    "License:\n    This software is licensed under the Apache-2.0 License.\n    https://apache.org/licenses/\n"
                 );
 
                 println!(

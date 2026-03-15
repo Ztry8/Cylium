@@ -9,22 +9,36 @@ use crate::{
     file_handler::FileHandler,
     lexer::Token,
     parser::{AstKind, AstNode, Cast, ElseBlock},
-    types::TypesCheck,
+    types::{ReturnType, TypesCheck},
 };
 
 pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     let mut consts = HashMap::new();
-    let mut procs = HashMap::new();
 
     consts.insert("PI".to_owned(), TypesCheck::Float);
     consts.insert("E".to_owned(), TypesCheck::Float);
 
+    let mut funcs: HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)> = HashMap::new();
+
     for node in ast.iter() {
-        if let AstKind::Proc { name, args, .. } = &node.kind
-            && procs.insert(name.clone(), args.clone()).is_some()
+        if let AstKind::Func {
+            name,
+            args,
+            return_type,
+            ..
+        } = &node.kind
+            && funcs
+                .insert(name.clone(), (args.clone(), return_type.clone()))
+                .is_some()
         {
             handler.show_error(node.line, errors::A38)
         }
+    }
+
+    match funcs.get("main") {
+        Some((args, ret)) if args.is_empty() && *ret == ReturnType::Number => {}
+        Some(_) => handler.show_error(0, errors::A22),
+        None => {}
     }
 
     for node in ast.iter_mut() {
@@ -34,7 +48,12 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
                     handler.show_error(node.line, errors::A37)
                 }
             }
-            AstKind::Proc { body, args, .. } => {
+            AstKind::Func {
+                body,
+                args,
+                return_type,
+                ..
+            } => {
                 let mut variables = HashMap::new();
 
                 for arg in args.iter() {
@@ -42,9 +61,15 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
                 }
 
                 for node in body.iter_mut() {
-                    if let Err(e) = main_check(&procs, &mut variables, &consts, &mut node.kind) {
+                    if let Err(e) =
+                        main_check(&funcs, &mut variables, &consts, &mut node.kind, return_type)
+                    {
                         handler.show_error(node.line, &e);
                     }
+                }
+
+                if *return_type != ReturnType::Void && !always_returns(body) {
+                    handler.show_error(node.line, errors::A46);
                 }
             }
 
@@ -53,13 +78,95 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     }
 }
 
+fn always_returns(body: &[AstNode]) -> bool {
+    for node in body.iter().rev() {
+        match &node.kind {
+            AstKind::Return(Some(_)) => return true,
+            AstKind::Condition { yes, no, .. } => {
+                let yes_ret = always_returns(yes);
+                let no_ret = match no {
+                    Some(ElseBlock::Else(els)) => always_returns(els),
+                    Some(ElseBlock::ElseIf(n)) => always_returns(std::slice::from_ref(n)),
+                    None => false,
+                };
+
+                if yes_ret && no_ret {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    false
+}
+
 fn main_check(
-    procs: &HashMap<String, Vec<(String, TypesCheck)>>,
+    funcs: &HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>,
     variables: &mut HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &mut AstKind,
+    return_type: &ReturnType,
 ) -> Result<(), String> {
     match node {
+        AstKind::Return(None) => {
+            if *return_type != ReturnType::Void {
+                return Err(errors::A43.to_owned());
+            }
+        }
+        AstKind::Return(Some(expr)) => {
+            let t = expr_annotate(funcs, variables, consts, expr)?;
+            let expected = match return_type {
+                ReturnType::Number => TypesCheck::Number,
+                ReturnType::Float => TypesCheck::Float,
+                ReturnType::String => TypesCheck::String,
+                ReturnType::Boolean => TypesCheck::Boolean,
+                ReturnType::Void => return Err(errors::A43.to_owned()),
+            };
+
+            if t != expected {
+                return Err(errors::A43.to_owned());
+            }
+        }
+        AstKind::FuncCall { name, args } => {
+            match name.as_str() {
+                "input" => {
+                    if !args.is_empty() {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    return Ok(());
+                }
+                "sin" | "cos" | "sqrt" => {
+                    if args.len() != 1 {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    if t != TypesCheck::Float {
+                        return Err(errors::A42.to_owned());
+                    }
+
+                    return Ok(());
+                }
+                _ => {}
+            }
+
+            if let Some((params, _)) = funcs.get(name) {
+                if args.len() != params.len() {
+                    return Err(errors::A27.to_owned());
+                }
+
+                for (i, arg) in args.iter_mut().enumerate() {
+                    let t = expr_annotate(funcs, variables, consts, arg)?;
+                    if t != params[i].1 {
+                        return Err(errors::A42.to_owned());
+                    }
+                }
+            } else {
+                return Err(errors::A24.to_owned());
+            }
+        }
         AstKind::Delete(name) => {
             if let Some((_, is_const)) = variables.remove(name) {
                 if is_const {
@@ -75,14 +182,14 @@ fn main_check(
             value,
             is_const,
         } => {
-            let real_type = expr_annotate(variables, consts, value)?;
+            let real_type = expr_annotate(funcs, variables, consts, value)?;
 
             if *type_ == real_type {
                 if variables
                     .insert(name.clone(), (type_.clone(), *is_const))
                     .is_some()
                 {
-                    return Err(errors::A07.to_owned());
+                    return Err(errors::A37.to_owned());
                 }
             } else {
                 return Err(errors::A43.to_owned());
@@ -97,7 +204,7 @@ fn main_check(
             if let Some((type_, is_const)) = variables.get(name) {
                 *var_type = type_.clone();
                 if !*is_const {
-                    let value = expr_annotate(variables, consts, expr)?;
+                    let value = expr_annotate(funcs, variables, consts, expr)?;
 
                     match op {
                         Token::Assign => {
@@ -162,45 +269,19 @@ fn main_check(
                 return Err(errors::A03.to_owned());
             }
         }
-        AstKind::ProcCall { name, args } => {
-            if let Some(proc) = procs.get(name) {
-                if args.len() != proc.len() {
-                    return Err(errors::A27.to_owned());
-                }
-
-                for (i, arg) in args.iter().enumerate() {
-                    let type_ = match arg {
-                        Token::Ident(name) => {
-                            expr_check(variables, consts, &AstKind::Ident(name.clone()))?
-                        }
-                        Token::NumberValue(_) => TypesCheck::Number,
-                        Token::FloatValue(_) => TypesCheck::Float,
-                        Token::StringValue(_) => TypesCheck::String,
-                        Token::BooleanValue(_) => TypesCheck::Boolean,
-                        _ => unreachable!(),
-                    };
-
-                    if type_ != proc[i].1 {
-                        return Err(errors::A42.to_owned());
-                    }
-                }
-            } else {
-                return Err(errors::A24.to_owned());
-            }
-        }
         AstKind::Condition { expr, yes, no } => {
-            if expr_annotate(variables, consts, expr)? == TypesCheck::Boolean {
+            if expr_annotate(funcs, variables, consts, expr)? == TypesCheck::Boolean {
                 for node in yes.iter_mut() {
-                    main_check(procs, variables, consts, &mut node.kind)?;
+                    main_check(funcs, variables, consts, &mut node.kind, return_type)?
                 }
 
                 match no {
                     Some(ElseBlock::ElseIf(node)) => {
-                        main_check(procs, variables, consts, &mut node.kind)?
+                        main_check(funcs, variables, consts, &mut node.kind, return_type)?
                     }
                     Some(ElseBlock::Else(nodes)) => {
                         for node in nodes.iter_mut() {
-                            main_check(procs, variables, consts, &mut node.kind)?;
+                            main_check(funcs, variables, consts, &mut node.kind, return_type)?
                         }
                     }
                     None => {}
@@ -210,9 +291,9 @@ fn main_check(
             }
         }
         AstKind::While { expr, body } => {
-            if expr_annotate(variables, consts, expr)? == TypesCheck::Boolean {
+            if expr_annotate(funcs, variables, consts, expr)? == TypesCheck::Boolean {
                 for node in body.iter_mut() {
-                    main_check(procs, variables, consts, &mut node.kind)?;
+                    main_check(funcs, variables, consts, &mut node.kind, return_type)?
                 }
             } else {
                 return Err(errors::A15.to_owned());
@@ -225,18 +306,24 @@ fn main_check(
             step,
             body,
         } => {
-            let start_type = expr_annotate(variables, consts, start)?;
+            let start_type = expr_annotate(funcs, variables, consts, start)?;
 
             if !matches!(start_type, TypesCheck::Number) {
                 return Err(errors::A15.to_owned());
             }
 
-            if !matches!(expr_annotate(variables, consts, end)?, TypesCheck::Number) {
+            if !matches!(
+                expr_annotate(funcs, variables, consts, end)?,
+                TypesCheck::Number
+            ) {
                 return Err(errors::A15.to_owned());
             }
 
             if let Some(step) = step.as_mut()
-                && !matches!(expr_annotate(variables, consts, step)?, TypesCheck::Number)
+                && !matches!(
+                    expr_annotate(funcs, variables, consts, step)?,
+                    TypesCheck::Number
+                )
             {
                 return Err(errors::A15.to_owned());
             }
@@ -244,11 +331,11 @@ fn main_check(
             variables.insert(var_name.clone(), (start_type, false));
 
             for node in body.iter_mut() {
-                main_check(procs, variables, consts, &mut node.kind)?;
+                main_check(funcs, variables, consts, &mut node.kind, return_type)?
             }
         }
         AstKind::Echo(expr) => {
-            expr_annotate(variables, consts, expr)?;
+            expr_annotate(funcs, variables, consts, expr)?;
         }
         _ => {}
     }
@@ -257,6 +344,7 @@ fn main_check(
 }
 
 fn expr_annotate(
+    funcs: &HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>,
     variables: &HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &mut AstKind,
@@ -265,14 +353,24 @@ fn expr_annotate(
         AstKind::UnaryOp {
             expr, expr_type, ..
         } => {
-            let t = expr_annotate(variables, consts, expr)?;
+            let t = expr_annotate(funcs, variables, consts, expr)?;
             *expr_type = t;
-            expr_check(variables, consts, node)
+            expr_check(funcs, variables, consts, node)
         }
         AstKind::AsOp { expr, src_type, .. } => {
-            let t = expr_annotate(variables, consts, expr)?;
+            let t = expr_annotate(funcs, variables, consts, expr)?;
             *src_type = t;
-            expr_check(variables, consts, node)
+            expr_check(funcs, variables, consts, node)
+        }
+        AstKind::FuncCall { args, .. } => {
+            for arg in args.iter_mut() {
+                expr_annotate(funcs, variables, consts, arg)?;
+            }
+
+            expr_check(funcs, variables, consts, node)
+        }
+        AstKind::Ident(_) => {
+            expr_check(funcs, variables, consts, node)
         }
         AstKind::BinaryOp {
             left,
@@ -281,17 +379,18 @@ fn expr_annotate(
             right_type,
             ..
         } => {
-            let lt = expr_annotate(variables, consts, left)?;
-            let rt = expr_annotate(variables, consts, right)?;
+            let lt = expr_annotate(funcs, variables, consts, left)?;
+            let rt = expr_annotate(funcs, variables, consts, right)?;
             *left_type = lt;
             *right_type = rt;
-            expr_check(variables, consts, node)
+            expr_check(funcs, variables, consts, node)
         }
-        _ => expr_check(variables, consts, node),
+        _ => expr_check(funcs, variables, consts, node),
     }
 }
 
 fn expr_check(
+    funcs: &HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>,
     variables: &HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &AstKind,
@@ -306,14 +405,31 @@ fn expr_check(
                 Ok(value.clone())
             } else if let Some(value) = consts.get(name) {
                 Ok(value.clone())
-            } else if name == "input" {
-                Ok(TypesCheck::String)
             } else {
                 Err(errors::A03.to_owned())
             }
         }
+        AstKind::FuncCall { name, .. } => {
+            match name.as_str() {
+                "input" => return Ok(TypesCheck::String),
+                "sin" | "cos" | "sqrt" => return Ok(TypesCheck::Float),
+                _ => {}
+            }
+
+            if let Some((_, ret)) = funcs.get(name) {
+                match ret {
+                    ReturnType::Number => Ok(TypesCheck::Number),
+                    ReturnType::Float => Ok(TypesCheck::Float),
+                    ReturnType::String => Ok(TypesCheck::String),
+                    ReturnType::Boolean => Ok(TypesCheck::Boolean),
+                    ReturnType::Void => Err(errors::A15.to_owned()),
+                }
+            } else {
+                Err(errors::A24.to_owned())
+            }
+        }
         AstKind::UnaryOp { op, expr, .. } => {
-            let value = expr_check(variables, consts, expr)?;
+            let value = expr_check(funcs, variables, consts, expr)?;
 
             match op {
                 Token::Not => match value {
@@ -333,7 +449,7 @@ fn expr_check(
             }
         }
         AstKind::AsOp { expr, op, .. } => {
-            let value = expr_check(variables, consts, expr)?;
+            let value = expr_check(funcs, variables, consts, expr)?;
 
             match op {
                 Cast::String => match value {
@@ -352,25 +468,13 @@ fn expr_check(
                     TypesCheck::Boolean => Err(errors::A40.to_owned()),
                     _ => Ok(TypesCheck::Boolean),
                 },
-                Cast::Sin => match value {
-                    TypesCheck::Float => Ok(TypesCheck::Float),
-                    _ => Err(errors::A41.to_owned()),
-                },
-                Cast::Cos => match value {
-                    TypesCheck::Float => Ok(TypesCheck::Float),
-                    _ => Err(errors::A41.to_owned()),
-                },
-                Cast::Sqrt => match value {
-                    TypesCheck::Float => Ok(TypesCheck::Float),
-                    _ => Err(errors::A41.to_owned()),
-                },
             }
         }
         AstKind::BinaryOp {
             left, op, right, ..
         } => {
-            let left = expr_check(variables, consts, left)?;
-            let right = expr_check(variables, consts, right)?;
+            let left = expr_check(funcs, variables, consts, left)?;
+            let right = expr_check(funcs, variables, consts, right)?;
 
             match op {
                 Token::Or => match (left, right) {

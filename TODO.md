@@ -11,19 +11,23 @@
   * [x] Implement `while` loop
   * [x] Implement `for` loop
 
-* [ ] Replace procedures with functions 
+* [x] Replace procedures with functions 
+* [ ] Add structures and enums
+  * [ ] Built-in result and option types
 * [ ] Add vectors type
 * [ ] Add `include` and support multi-file scripts
 
+* [ ] Replace interpreter with compilation 
+
 * [ ] Build the standard library
   * [ ] Math operations
+  * [ ] Time operations
   * [ ] Vector operations
   * [ ] String manipulation
   * [ ] Random number generation
   * [ ] File system API
   * [ ] Networking API
 
-* [ ] Replace interpreter with JIT compilation ?
 * [ ] Community libraries support
 
 * [ ] Foreign Function Interface (FFI)

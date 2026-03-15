@@ -9,7 +9,7 @@ use crate::{
     file_handler::FileHandler,
     lexer::Token,
     parser::{AstKind, AstNode, Cast, ElseBlock},
-    types::TypesCheck,
+    types::{ReturnType, TypesCheck},
 };
 
 #[derive(Debug)]
@@ -19,9 +19,11 @@ pub struct Node {
 }
 
 #[derive(Debug)]
-pub struct Proc {
+pub struct Func {
     pub args: Vec<(String, TypesCheck)>,
     pub body: Vec<Node>,
+    #[allow(dead_code)]
+    pub return_type: ReturnType,
 }
 
 #[derive(Debug)]
@@ -55,9 +57,6 @@ pub enum Instruction {
     DivFloat,
     ModFloat,
     NegFloat,
-    SinFloat,
-    CosFloat,
-    SqrtFloat,
 
     ConcatStr,
     ConcatStrInt,
@@ -110,10 +109,14 @@ pub enum Instruction {
     Echo,
     Exit(i32),
     Delete(String),
-    Call(String, usize),
+
+    CallFunc(String, usize),
+    Return,
+    ReturnValue,
 
     Jump(usize),
     JumpIfFalse(usize),
+    Pop,
 }
 
 #[inline(always)]
@@ -124,9 +127,25 @@ fn push_node(out: &mut Vec<Node>, instruction: Instruction, line: usize) {
     });
 }
 
-pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Proc>, Vec<Node>) {
+pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Func>, Vec<Node>) {
     let mut const_code = Vec::new();
-    let mut procs = HashMap::new();
+    let mut funcs = HashMap::new();
+
+    let mut funcs_rt: HashMap<String, ReturnType> = HashMap::new();
+
+    funcs_rt.insert("input".to_owned(), ReturnType::String);
+    funcs_rt.insert("sin".to_owned(), ReturnType::Float);
+    funcs_rt.insert("cos".to_owned(), ReturnType::Float);
+    funcs_rt.insert("sqrt".to_owned(), ReturnType::Float);
+
+    for node in &ast {
+        if let AstKind::Func {
+            name, return_type, ..
+        } = &node.kind
+        {
+            funcs_rt.insert(name.clone(), return_type.clone());
+        }
+    }
 
     for node in ast {
         match node.kind {
@@ -142,16 +161,22 @@ pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Pro
                 })),
                 Err(e) => handler.show_error(node.line, &e),
             },
-            AstKind::Proc { name, body, args } => {
+            AstKind::Func {
+                name,
+                body,
+                args,
+                return_type,
+            } => {
                 let mut proc_body: Vec<Node> = Vec::new();
 
-                compile_body(handler, body, &mut proc_body);
+                compile_body(handler, body, &mut proc_body, &funcs_rt);
 
-                procs.insert(
+                funcs.insert(
                     name,
-                    Proc {
+                    Func {
                         args,
                         body: proc_body,
+                        return_type,
                     },
                 );
             }
@@ -159,19 +184,29 @@ pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Pro
         }
     }
 
-    (procs, const_code)
+    (funcs, const_code)
 }
 
-fn compile_body(handler: &FileHandler, body: Vec<AstNode>, out: &mut Vec<Node>) {
+fn compile_body(
+    handler: &FileHandler,
+    body: Vec<AstNode>,
+    out: &mut Vec<Node>,
+    funcs_rt: &HashMap<String, ReturnType>,
+) {
     for node in body {
         let line = node.line;
-        if let Err(e) = main_compile(node.kind, out, line) {
+        if let Err(e) = main_compile(node.kind, out, line, funcs_rt) {
             handler.show_error(line, &e);
         }
     }
 }
 
-fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), String> {
+fn main_compile(
+    node: AstKind,
+    out: &mut Vec<Node>,
+    line: usize,
+    funcs_rt: &HashMap<String, ReturnType>,
+) -> Result<(), String> {
     match node {
         AstKind::Echo(expr) => {
             expr_compile(out, *expr, line)?;
@@ -193,19 +228,27 @@ fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), S
                 push_node(out, inst, line);
             }
         }
-        AstKind::ProcCall { name, args } => {
-            for arg in args.iter().rev() {
-                let inst = match arg {
-                    Token::Ident(n) => Instruction::Load(n.clone()),
-                    Token::NumberValue(v) => Instruction::PushInt(*v),
-                    Token::FloatValue(v) => Instruction::PushFloat(*v),
-                    Token::StringValue(v) => Instruction::PushStr(v.clone()),
-                    Token::BooleanValue(v) => Instruction::PushBool(*v),
-                    _ => unreachable!(),
-                };
-                push_node(out, inst, line);
+        AstKind::Return(None) => {
+            push_node(out, Instruction::Return, line);
+        }
+        AstKind::Return(Some(expr)) => {
+            expr_compile(out, *expr, line)?;
+            push_node(out, Instruction::ReturnValue, line);
+        }
+        AstKind::FuncCall { name, args } => {
+            let argc = args.len();
+            for arg in args.into_iter().rev() {
+                expr_compile(out, arg, line)?;
             }
-            push_node(out, Instruction::Call(name, args.len()), line);
+            push_node(out, Instruction::CallFunc(name.clone(), argc), line);
+
+            let has_value = funcs_rt
+                .get(&name)
+                .map(|rt| *rt != ReturnType::Void)
+                .unwrap_or(false);
+            if has_value {
+                push_node(out, Instruction::Pop, line);
+            }
         }
         AstKind::Assign {
             name,
@@ -309,10 +352,10 @@ fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), S
             }
         }
         AstKind::Condition { expr, yes, no } => {
-            condition_compile(out, *expr, yes, no, line)?;
+            condition_compile(out, *expr, yes, no, line, funcs_rt)?;
         }
         AstKind::While { expr, body } => {
-            while_compile(out, *expr, body, line)?;
+            while_compile(out, *expr, body, line, funcs_rt)?;
         }
         AstKind::For {
             var_name,
@@ -321,7 +364,7 @@ fn main_compile(node: AstKind, out: &mut Vec<Node>, line: usize) -> Result<(), S
             step,
             body,
         } => {
-            for_compile(out, var_name, *start, *end, *step, body, line)?;
+            for_compile(out, var_name, *start, *end, *step, body, line, funcs_rt)?;
         }
         _ => unreachable!(),
     }
@@ -335,6 +378,7 @@ fn condition_compile(
     yes: Vec<AstNode>,
     no: Option<ElseBlock>,
     line: usize,
+    funcs_rt: &HashMap<String, ReturnType>,
 ) -> Result<(), String> {
     expr_compile(out, expr, line)?;
     let jif_idx = out.len();
@@ -342,7 +386,7 @@ fn condition_compile(
     push_node(out, Instruction::JumpIfFalse(0), line);
 
     for node in yes {
-        main_compile(node.kind, out, node.line)?;
+        main_compile(node.kind, out, node.line, funcs_rt)?;
     }
 
     match no {
@@ -356,7 +400,7 @@ fn condition_compile(
             let else_start = out.len();
             out[jif_idx].instruction = Instruction::JumpIfFalse(else_start);
             for node in else_body {
-                main_compile(node.kind, out, node.line)?;
+                main_compile(node.kind, out, node.line, funcs_rt)?;
             }
             let end = out.len();
             out[jump_idx].instruction = Instruction::Jump(end);
@@ -366,7 +410,7 @@ fn condition_compile(
             push_node(out, Instruction::Jump(0), line);
             let elseif_start = out.len();
             out[jif_idx].instruction = Instruction::JumpIfFalse(elseif_start);
-            main_compile(node.kind, out, node.line)?;
+            main_compile(node.kind, out, node.line, funcs_rt)?;
             let end = out.len();
             out[jump_idx].instruction = Instruction::Jump(end);
         }
@@ -379,13 +423,14 @@ fn while_compile(
     expr: AstKind,
     body: Vec<AstNode>,
     line: usize,
+    funcs_rt: &HashMap<String, ReturnType>,
 ) -> Result<(), String> {
     let loop_start = out.len();
     expr_compile(out, expr, line)?;
     let jif_idx = out.len();
     push_node(out, Instruction::JumpIfFalse(0), line);
     for node in body {
-        main_compile(node.kind, out, node.line)?;
+        main_compile(node.kind, out, node.line, funcs_rt)?;
     }
     push_node(out, Instruction::Jump(loop_start), line);
     let end = out.len();
@@ -401,6 +446,7 @@ fn for_compile(
     step: Option<AstKind>,
     body: Vec<AstNode>,
     line: usize,
+    funcs_rt: &HashMap<String, ReturnType>,
 ) -> Result<(), String> {
     expr_compile(out, start, line)?;
     push_node(out, Instruction::StoreLocal(var_name.clone()), line);
@@ -429,7 +475,7 @@ fn for_compile(
     push_node(out, Instruction::JumpIfFalse(0), line);
 
     for node in body {
-        main_compile(node.kind, out, node.line)?;
+        main_compile(node.kind, out, node.line, funcs_rt)?;
     }
 
     push_node(out, Instruction::Load(var_name.clone()), line);
@@ -468,6 +514,13 @@ fn expr_compile(out: &mut Vec<Node>, value: AstKind, line: usize) -> Result<(), 
         AstKind::AsOp { expr, op, src_type } => {
             expr_compile(out, *expr, line)?;
             push_node(out, cast_inst(&op, &src_type), line);
+        }
+        AstKind::FuncCall { name, args } => {
+            let argc = args.len();
+            for arg in args.into_iter().rev() {
+                expr_compile(out, arg, line)?;
+            }
+            push_node(out, Instruction::CallFunc(name, argc), line);
         }
         AstKind::BinaryOp {
             left,
@@ -517,9 +570,6 @@ fn cast_inst(op: &Cast, src: &TypesCheck) -> Instruction {
             TypesCheck::String => Instruction::StrToBool,
             TypesCheck::Boolean => unreachable!(),
         },
-        Cast::Sin => Instruction::SinFloat,
-        Cast::Cos => Instruction::CosFloat,
-        Cast::Sqrt => Instruction::SqrtFloat,
     }
 }
 

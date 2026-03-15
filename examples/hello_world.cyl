@@ -1,5 +1,6 @@
 # Hello World in Cylium
 
-proc main
-    echo "Hello, World!"
+func main() -> number
+    echo("Hello, World!")
+    return 0
 end

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    bytecode::{Instruction, Node, Proc},
+    bytecode::{Func, Instruction, Node},
     errors,
     file_handler::FileHandler,
     scope::Scope,
@@ -61,7 +61,7 @@ fn pop_str(stack: &mut Vec<Types>) -> String {
     }
 }
 
-pub fn execute(handler: &FileHandler, program: HashMap<String, Proc>, const_nodes: Vec<Node>) {
+pub fn execute(handler: &FileHandler, program: HashMap<String, Func>, const_nodes: Vec<Node>) {
     let Some(main) = program.get("main") else {
         handler.show_error(0, errors::A22);
     };
@@ -77,7 +77,7 @@ pub fn execute(handler: &FileHandler, program: HashMap<String, Proc>, const_node
         match node.instruction {
             Instruction::StoreConst(name) => {
                 if consts.exist(&name) {
-                    handler.show_error(node.line_number, errors::A07);
+                    handler.show_error(node.line_number, errors::A37);
                 }
                 consts.declare(
                     name,
@@ -96,30 +96,35 @@ pub fn execute(handler: &FileHandler, program: HashMap<String, Proc>, const_node
     }
     stack.clear();
 
-    run_body(
+    let code = match run_body(
         &program,
         &main.body,
         &mut scope,
         &mut consts,
         &mut stack,
         handler,
-    );
+    ) {
+        Some(Types::Scalar(Scalar::Number(n))) => n as i32,
+        _ => 0,
+    };
+
+    std::process::exit(code);
 }
 
 fn run_body(
-    program: &HashMap<String, Proc>,
+    program: &HashMap<String, Func>,
     body: &[Node],
     scope: &mut Scope,
     consts: &mut Scope,
     stack: &mut Vec<Types>,
     handler: &FileHandler,
-) {
+) -> Option<Types> {
     let len = body.len();
     let mut ip: usize = 0;
 
     while ip < len {
         let node = &body[ip];
-        if let Err(e) = dispatch(
+        match dispatch(
             handler,
             program,
             &node.instruction,
@@ -128,23 +133,27 @@ fn run_body(
             stack,
             &mut ip,
         ) {
-            handler.show_error(node.line_number, &e);
+            Ok(None) => {}
+            Ok(Some(val)) => return Some(val),
+            Err(e) => handler.show_error(node.line_number, &e),
         }
 
         ip += 1;
     }
+
+    None
 }
 
 #[inline(always)]
 fn dispatch(
     handler: &FileHandler,
-    program: &HashMap<String, Proc>,
+    program: &HashMap<String, Func>,
     instr: &Instruction,
     scope: &mut Scope,
     consts: &mut Scope,
     stack: &mut Vec<Types>,
     ip: &mut usize,
-) -> Result<(), String> {
+) -> Result<Option<Types>, String> {
     match instr {
         Instruction::Jump(target) => {
             *ip = target.wrapping_sub(1);
@@ -152,6 +161,76 @@ fn dispatch(
         Instruction::JumpIfFalse(target) => {
             if !pop_bool(stack) {
                 *ip = target.wrapping_sub(1);
+            }
+        }
+
+        Instruction::Pop => {
+            stack.pop();
+        }
+
+        Instruction::Return => return Ok(Some(Types::Void)),
+
+        Instruction::ReturnValue => {
+            let val = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
+
+            return Ok(Some(val));
+        }
+
+        Instruction::CallFunc(name, argc) => {
+            match name.as_str() {
+                "input" => {
+                    std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                    let mut buf = String::new();
+                    if std::io::stdin().read_line(&mut buf).is_err() {
+                        FileHandler::show_warning(errors::C02);
+                    }
+                    stack.push(Types::String(buf.trim().to_string()));
+                    return Ok(None);
+                }
+                "sin" => {
+                    let a = pop_float(stack);
+                    stack.push(flt(a.sin()));
+                    return Ok(None);
+                }
+                "cos" => {
+                    let a = pop_float(stack);
+                    stack.push(flt(a.cos()));
+                    return Ok(None);
+                }
+                "sqrt" => {
+                    let a = pop_float(stack);
+                    if a >= 0.0 {
+                        stack.push(flt(a.sqrt()));
+                    } else {
+                        return Err(errors::A45.to_owned());
+                    }
+                    return Ok(None);
+                }
+                _ => {}
+            }
+
+            let func = program.get(name).ok_or_else(|| errors::A24.to_owned())?;
+
+            let mut func_scope = Scope::new();
+            for i in 0..*argc {
+                func_scope.declare(
+                    func.args[i].0.clone(),
+                    stack.pop().ok_or_else(|| errors::A27.to_owned())?,
+                    false,
+                );
+            }
+
+            let mut func_stack: Vec<Types> = Vec::with_capacity(32);
+            if let Some(val) = run_body(
+                program,
+                &func.body,
+                &mut func_scope,
+                consts,
+                &mut func_stack,
+                handler,
+            ) && !matches!(val, Types::Void)
+            {
+                stack.push(val);
             }
         }
 
@@ -166,7 +245,7 @@ fn dispatch(
 
         Instruction::StoreConst(name) => {
             if consts.exist(name) {
-                return Err(errors::A07.to_owned());
+                return Err(errors::A37.to_owned());
             }
 
             consts.declare(
@@ -177,22 +256,13 @@ fn dispatch(
         }
 
         Instruction::Load(name) => {
-            stack.push(if name == "input" {
-                std::io::Write::flush(&mut std::io::stdout()).unwrap();
-                let mut buf = String::new();
-
-                if std::io::stdin().read_line(&mut buf).is_err() {
-                    FileHandler::show_warning(errors::C02);
-                }
-
-                Types::String(buf.trim().to_string())
-            } else {
+            stack.push(
                 scope
                     .get(consts, name)
                     .ok_or_else(|| errors::A03.to_owned())?
                     .0
-                    .clone()
-            });
+                    .clone(),
+            );
         }
 
         Instruction::PushInt(v) => stack.push(int(*v)),
@@ -247,12 +317,22 @@ fn dispatch(
         Instruction::DivInt => {
             let a = pop_int(stack);
             let b = pop_int(stack);
-            stack.push(int(a / b));
+
+            if b == 0 {
+                return Err(errors::A44.to_owned());
+            } else {
+                stack.push(int(a / b));
+            }
         }
         Instruction::ModInt => {
             let a = pop_int(stack);
             let b = pop_int(stack);
-            stack.push(int(a % b));
+
+            if b == 0 {
+                return Err(errors::A44.to_owned());
+            } else {
+                stack.push(int(a % b));
+            }
         }
         Instruction::NegInt => {
             let a = pop_int(stack);
@@ -277,28 +357,26 @@ fn dispatch(
         Instruction::DivFloat => {
             let a = pop_float(stack);
             let b = pop_float(stack);
-            stack.push(flt(a / b));
+
+            if b == 0.0 {
+                return Err(errors::A44.to_owned());
+            } else {
+                stack.push(flt(a / b));
+            }
         }
         Instruction::ModFloat => {
             let a = pop_float(stack);
             let b = pop_float(stack);
-            stack.push(flt(a % b));
+
+            if b == 0.0 {
+                return Err(errors::A44.to_owned());
+            } else {
+                stack.push(flt(a % b));
+            }
         }
         Instruction::NegFloat => {
             let a = pop_float(stack);
             stack.push(flt(-a));
-        }
-        Instruction::SinFloat => {
-            let a = pop_float(stack);
-            stack.push(flt(a.sin()));
-        }
-        Instruction::CosFloat => {
-            let a = pop_float(stack);
-            stack.push(flt(a.cos()));
-        }
-        Instruction::SqrtFloat => {
-            let a = pop_float(stack);
-            stack.push(flt(a.sqrt()));
         }
 
         Instruction::ConcatStr => {
@@ -461,7 +539,7 @@ fn dispatch(
         }
         Instruction::IntToBool => {
             let v = pop_int(stack);
-            stack.push(bl(v == 1));
+            stack.push(bl(v != 0));
         }
         Instruction::IntToStr => {
             let v = pop_int(stack);
@@ -473,7 +551,7 @@ fn dispatch(
         }
         Instruction::FloatToBool => {
             let v = pop_float(stack);
-            stack.push(bl(v == 1.0));
+            stack.push(bl(v != 0.0));
         }
         Instruction::FloatToStr => {
             let v = pop_float(stack);
@@ -517,7 +595,7 @@ fn dispatch(
             Some(Types::Scalar(Scalar::Float(v))) => println!("{}", v),
             Some(Types::Scalar(Scalar::Boolean(v))) => println!("{}", v),
             Some(Types::String(v)) => println!("{}", v),
-            None => return Err(errors::A15.to_owned()),
+            _ => return Err(errors::A15.to_owned()),
         },
 
         Instruction::Exit(code) => std::process::exit(*code),
@@ -528,30 +606,9 @@ fn dispatch(
                 return Err(errors::A03.to_owned());
             }
         }
-
-        Instruction::Call(name, argc) => {
-            let proc = program.get(name).ok_or_else(|| errors::A24.to_owned())?;
-            let mut proc_scope = Scope::new();
-            for i in 0..*argc {
-                proc_scope.declare(
-                    proc.args[i].0.clone(),
-                    stack.pop().ok_or_else(|| errors::A27.to_owned())?,
-                    false,
-                );
-            }
-
-            let mut proc_stack: Vec<Types> = Vec::with_capacity(32);
-            run_body(
-                program,
-                &proc.body,
-                &mut proc_scope,
-                consts,
-                &mut proc_stack,
-                handler,
-            );
-        }
     }
-    Ok(())
+
+    Ok(None)
 }
 
 fn expr_execute(
@@ -568,4 +625,5 @@ fn expr_execute(
         stack,
         &mut 0,
     )
+    .map(|_| ())
 }

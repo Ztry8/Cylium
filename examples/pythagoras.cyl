@@ -1,8 +1,10 @@
 # Implementation of the Pythagorean theorem in Cylium
 
-proc main
-    float x = input as float
-    float y = input as float
+func main() -> number
+    float x = input() as float
+    float y = input() as float
 
-    echo (x * x + y * y) as sqrt
+    echo(sqrt(x * x + y * y))
+    
+    return 0
 end

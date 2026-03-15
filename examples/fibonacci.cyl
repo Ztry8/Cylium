@@ -1,19 +1,19 @@
 # Implementation of the Fibonacci sequence in Cylium
 
-proc main
-    number n = input as number
+func fib(n: number) -> number
+    if n <= 1
+        return n
+    endif
 
-    number a = 0
-    number b = 1
+    return fib(n - 1) + fib(n - 2)
+end
 
-    for i from 0 to n 
-        echo a
+func main() -> number
+    number n = input() as number
 
-        number next = a + b 
-
-        a = b
-        b = next
+    for i from 0 to n
+        echo(fib(i))
     endfor
 
-    exit 0
+    return 0
 end

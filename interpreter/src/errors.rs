@@ -18,12 +18,12 @@ pub const A16: &str = "A16: Invalid type for arithmetic operation.";
 // pub const A18: &str = "A18: This operator can only be used with strings.";
 
 pub const A19: &str = "A19: Cannot convert value to vector.";
-pub const A20: &str = "A20: Statements are only allowed inside procedures";
+pub const A20: &str = "A20: Statements are only allowed inside functions.";
 
 pub const A21: &str = "A21: Unclosed string.";
-pub const A22: &str = "A22: Entry point procedure `main` not found.";
+pub const A22: &str = "A22: Entry point function `main` not found.";
 
-pub const A24: &str = "A24: Requested procedure does not exist.";
+pub const A24: &str = "A24: Requested function does not exist.";
 pub const A26: &str = "A26: Expected code for exit.";
 
 pub const A27: &str = "A27: Arguments count do not match.";
@@ -38,15 +38,20 @@ pub const A35: &str = "A35: Cannot convert value to logical type.";
 // pub const A36: &str = "A36: Cannot convert value to string type.";
 pub const A37: &str = "A37: Constant declared more than one time.";
 
-pub const A38: &str = "A38: Procedure declared more than one time.";
+pub const A38: &str = "A38: function declared more than one time.";
 pub const A39: &str = "A39: Invalid type for logical operation.";
 
 pub const A40: &str = "A40: Variable is already of the target type.";
-pub const A41: &str = "A41: Invalid type for fractional operation.";
+// pub const A41: &str = "A41: Invalid type for fractional operation.";
 
 pub const A42: &str = "A42: Arguments types do not match.";
 pub const A43: &str = "A43: Variable type do not match.";
 
+pub const A44: &str = "A44: Cannot divide a number by zero.";
+pub const A45: &str = "A45: Cannot root a negative number.";
+
+pub const A46: &str = "A46: Non-void function must always return a value.";
+
 //
 
-pub const C02: &str = "C02: Failed to read input";
+pub const C02: &str = "C02: Failed to read input.";

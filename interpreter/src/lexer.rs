@@ -12,7 +12,6 @@ pub enum Token {
     StringValue(String),
     BooleanValue(bool),
 
-    Call,     // call
     As,       // as
     While,    // while
     EndWhile, // endwhile
@@ -24,6 +23,7 @@ pub enum Token {
     Number,   // number
     Float,    // float
     String,   // string
+    Void,     // void
     Bool,     // bool
     Const,    // const
     If,       // if
@@ -32,8 +32,10 @@ pub enum Token {
     Echo,     // echo
     Exit,     // exit
     Delete,   // delete
-    Proc,     // proc
+    Func,     // func
     End,      // end
+    Return,   // return
+    Arrow,    // ->
 
     Plus,           // +
     Minus,          // -
@@ -146,13 +148,17 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
             ':' => tokens.push(Token::Colon),
 
             '+' => tokens.push(check(&chars, &mut i, Token::Plus, Token::PlusAssign, None)),
-            '-' => tokens.push(check(
-                &chars,
-                &mut i,
-                Token::Minus,
-                Token::MinusAssign,
-                None,
-            )),
+            '-' => {
+                if i + 1 < chars.len() && chars[i + 1] == '>' {
+                    i += 1;
+                    tokens.push(Token::Arrow);
+                } else if i + 1 < chars.len() && chars[i + 1] == '=' {
+                    i += 1;
+                    tokens.push(Token::MinusAssign);
+                } else {
+                    tokens.push(Token::Minus);
+                }
+            }
 
             '/' => tokens.push(check(
                 &chars,
@@ -233,8 +239,17 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
             '"' => {
                 i += 1;
                 let mut string = String::new();
-                while i < chars.len() && !(i > 0 && chars[i - 1] != '\\' && chars[i] == '"') {
-                    string.push(chars[i]);
+                let mut escaped = false;
+                while i < chars.len() {
+                    let c = chars[i];
+                    if escaped {
+                        escaped = false;
+                    } else if c == '\\' {
+                        escaped = true;
+                    } else if c == '"' {
+                        break;
+                    }
+                    string.push(c);
                     i += 1;
                 }
 
@@ -284,7 +299,6 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                     match ident.as_str() {
                         "true" => tokens.push(Token::BooleanValue(true)),
                         "false" => tokens.push(Token::BooleanValue(false)),
-                        "call" => tokens.push(Token::Call),
                         "as" => tokens.push(Token::As),
                         "number" => tokens.push(Token::Number),
                         "float" => tokens.push(Token::Float),
@@ -303,7 +317,9 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                         "echo" => tokens.push(Token::Echo),
                         "exit" => tokens.push(Token::Exit),
                         "delete" => tokens.push(Token::Delete),
-                        "proc" => tokens.push(Token::Proc),
+                        "func" => tokens.push(Token::Func),
+                        "return" => tokens.push(Token::Return),
+                        "void" => tokens.push(Token::Void),
                         "end" => tokens.push(Token::End),
                         "while" => tokens.push(Token::While),
                         "not" => tokens.push(Token::Not),

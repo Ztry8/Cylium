@@ -37,6 +37,7 @@ impl Scope {
             .iter_mut()
             .rev()
             .find(|(n, _, _)| n == name)
+            .filter(|(_, _, is_const)| !*is_const)
             .map(|(_, v, _)| v)
     }
 
@@ -63,8 +64,9 @@ impl Scope {
     #[inline(always)]
     pub fn declare(&mut self, name: String, value: Types, is_const: bool) {
         if let Some(entry) = self.vars.iter_mut().find(|(n, _, _)| n == &name) {
-            entry.1 = value;
-            entry.2 = is_const;
+            if !entry.2 {
+                entry.1 = value;
+            }
         } else {
             self.vars.push((name, value, is_const));
         }
