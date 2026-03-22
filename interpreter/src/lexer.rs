@@ -36,6 +36,7 @@ pub enum Token {
     End,      // end
     Return,   // return
     Arrow,    // ->
+    In,       // in
 
     Plus,           // +
     Minus,          // -
@@ -285,12 +286,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                     }
                 } else if chars[i].is_alphabetic() || chars[i] == '_' {
                     let mut ident = String::new();
-                    while i < chars.len()
-                        && (chars[i].is_alphanumeric()
-                            || chars[i] == '_'
-                            || chars[i] == '['
-                            || chars[i] == ']')
-                    {
+                    while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
                         ident.push(chars[i]);
                         i += 1;
                     }
@@ -312,6 +308,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                         "for" => tokens.push(Token::For),
                         "from" => tokens.push(Token::From),
                         "to" => tokens.push(Token::To),
+                        "in" => tokens.push(Token::In),
                         "step" => tokens.push(Token::Step),
                         "endfor" => tokens.push(Token::EndFor),
                         "echo" => tokens.push(Token::Echo),

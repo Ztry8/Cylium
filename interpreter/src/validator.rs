@@ -128,6 +128,131 @@ fn main_check(
                 return Err(errors::A43.to_owned());
             }
         }
+        AstKind::ArrayDecl {
+            name,
+            elem_type,
+            sizes,
+            init,
+            is_const,
+        } => {
+            for size_expr in sizes.iter_mut() {
+                let st = expr_annotate(funcs, variables, consts, size_expr)?;
+                if st != TypesCheck::Number {
+                    return Err(errors::A30.to_owned());
+                }
+            }
+
+            if let AstKind::Array(elems) = init.as_mut() {
+                let fill_idx = if elems.len() == 1 {
+                    if let AstKind::Array(inner) = &elems[0] {
+                        if inner.len() == 1 { Some((0, 0)) } else { None }
+                    } else {
+                        None
+                    }
+                } else if !elems.is_empty()
+                    && elems
+                        .iter()
+                        .all(|e| matches!(e, AstKind::Array(inner) if inner.len() == 1))
+                {
+                    Some((0, 0))
+                } else {
+                    None
+                };
+
+                if !sizes.is_empty() && fill_idx.is_some() {
+                    let mut base = elem_type.clone();
+                    for _ in 1..sizes.len() {
+                        if let TypesCheck::Array(inner) = base {
+                            base = *inner;
+                        }
+                    }
+
+                    if let AstKind::Array(inner) = &mut elems[0] {
+                        let t = expr_annotate(funcs, variables, consts, &mut inner[0])?;
+                        if t != base {
+                            return Err(errors::A47.to_owned());
+                        }
+                    }
+                } else {
+                    for el in elems.iter_mut() {
+                        let t = expr_annotate(funcs, variables, consts, el)?;
+                        if t != *elem_type {
+                            return Err(errors::A47.to_owned());
+                        }
+                    }
+                }
+            } else {
+                let t = expr_annotate(funcs, variables, consts, init)?;
+                if t != *elem_type {
+                    return Err(errors::A47.to_owned());
+                }
+            }
+
+            variables.insert(
+                name.clone(),
+                (TypesCheck::Array(Box::new(elem_type.clone())), *is_const),
+            );
+        }
+
+        AstKind::ArraySet {
+            name,
+            indices,
+            expr,
+            elem_type,
+            op: _,
+        } => {
+            let mut cur_type = match variables.get(name) {
+                Some((t, is_const)) => {
+                    if *is_const {
+                        return Err(errors::A07.to_owned());
+                    }
+                    t.clone()
+                }
+                None => return Err(errors::A48.to_owned()),
+            };
+
+            for idx in indices.iter_mut() {
+                match cur_type {
+                    TypesCheck::Array(inner) => {
+                        let idx_t = expr_annotate(funcs, variables, consts, idx)?;
+                        if idx_t != TypesCheck::Number {
+                            return Err(errors::A15.to_owned());
+                        }
+                        cur_type = *inner;
+                    }
+                    _ => return Err(errors::A48.to_owned()),
+                }
+            }
+
+            *elem_type = cur_type.clone();
+            let val_t = expr_annotate(funcs, variables, consts, expr)?;
+
+            if val_t != cur_type {
+                return Err(errors::A47.to_owned());
+            }
+        }
+
+        AstKind::ArrayGet { name, indices } => {
+            let mut cur_type = variables
+                .get(name)
+                .map(|(t, _)| t.clone())
+                .or_else(|| consts.get(name).cloned())
+                .ok_or_else(|| errors::A03.to_owned())?;
+
+            for idx in indices.iter_mut() {
+                match cur_type {
+                    TypesCheck::Array(inner) => {
+                        let idx_t = expr_annotate(funcs, variables, consts, idx)?;
+                        if idx_t != TypesCheck::Number {
+                            return Err(errors::A15.to_owned());
+                        }
+                        cur_type = *inner;
+                    }
+                    _ => return Err(errors::A48.to_owned()),
+                }
+            }
+        }
+
         AstKind::FuncCall { name, args } => {
             match name.as_str() {
                 "input" => {
@@ -144,6 +269,18 @@ fn main_check(
 
                     let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
                     if t != TypesCheck::Float {
+                        return Err(errors::A42.to_owned());
+                    }
+
+                    return Ok(());
+                }
+                "len" => {
+                    if args.len() != 1 {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    if !matches!(t, TypesCheck::Array(_)) {
                         return Err(errors::A42.to_owned());
                     }
 
@@ -334,6 +471,26 @@ fn main_check(
                 main_check(funcs, variables, consts, &mut node.kind, return_type)?
             }
         }
+        AstKind::ForIn {
+            var_name,
+            array_name,
+            body,
+        } => {
+            let elem_type = match variables
+                .get(array_name)
+                .map(|(t, _)| t)
+                .or_else(|| consts.get(array_name))
+            {
+                Some(TypesCheck::Array(et)) => *et.clone(),
+                _ => return Err(errors::A48.to_owned()),
+            };
+
+            variables.insert(var_name.clone(), (elem_type, false));
+
+            for node in body.iter_mut() {
+                main_check(funcs, variables, consts, &mut node.kind, return_type)?;
+            }
+        }
         AstKind::Echo(expr) => {
             expr_annotate(funcs, variables, consts, expr)?;
         }
@@ -362,16 +519,57 @@ fn expr_annotate(
             *src_type = t;
             expr_check(funcs, variables, consts, node)
         }
-        AstKind::FuncCall { args, .. } => {
+        AstKind::FuncCall { name, args } => {
             for arg in args.iter_mut() {
                 expr_annotate(funcs, variables, consts, arg)?;
             }
+            match name.as_str() {
+                "sin" | "cos" | "sqrt" => {
+                    if args.len() != 1 {
+                        return Err(errors::A27.to_owned());
+                    }
 
+                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    if t != TypesCheck::Float {
+                        return Err(errors::A42.to_owned());
+                    }
+                }
+                "len" => {
+                    if args.len() != 1 {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    if !matches!(t, TypesCheck::Array(_)) {
+                        return Err(errors::A42.to_owned());
+                    }
+                }
+                _ => {}
+            }
             expr_check(funcs, variables, consts, node)
         }
-        AstKind::Ident(_) => {
+        AstKind::ArrayGet { indices, .. } => {
+            for idx in indices.iter_mut() {
+                expr_annotate(funcs, variables, consts, idx)?;
+            }
             expr_check(funcs, variables, consts, node)
         }
+        AstKind::Array(elems) => {
+            if elems.is_empty() {
+                return Err(errors::A15.to_owned());
+            }
+
+            let first_t = expr_annotate(funcs, variables, consts, &mut elems[0])?;
+            for el in elems[1..].iter_mut() {
+                let t = expr_annotate(funcs, variables, consts, el)?;
+                if t != first_t {
+                    return Err(errors::A47.to_owned());
+                }
+            }
+
+            Ok(TypesCheck::Array(Box::new(first_t)))
+        }
+        AstKind::Ident(_) => expr_check(funcs, variables, consts, node),
         AstKind::BinaryOp {
             left,
             right,
@@ -413,6 +611,7 @@ fn expr_check(
             match name.as_str() {
                 "input" => return Ok(TypesCheck::String),
                 "sin" | "cos" | "sqrt" => return Ok(TypesCheck::Float),
+                "len" => return Ok(TypesCheck::Number),
                 _ => {}
             }
 
@@ -427,6 +626,30 @@ fn expr_check(
             } else {
                 Err(errors::A24.to_owned())
             }
+        }
+        AstKind::Array(elems) => {
+            if elems.is_empty() {
+                return Err(errors::A15.to_owned());
+            }
+
+            let first_t = expr_check(funcs, variables, consts, &elems[0])?;
+            Ok(TypesCheck::Array(Box::new(first_t)))
+        }
+        AstKind::ArrayGet { name, indices } => {
+            let mut cur = variables
+                .get(name)
+                .map(|(t, _)| t.clone())
+                .or_else(|| consts.get(name).cloned())
+                .ok_or_else(|| errors::A03.to_owned())?;
+
+            for _ in indices {
+                match cur {
+                    TypesCheck::Array(inner) => cur = *inner,
+                    _ => return Err(errors::A48.to_owned()),
+                }
+            }
+            
+            Ok(cur)
         }
         AstKind::UnaryOp { op, expr, .. } => {
             let value = expr_check(funcs, variables, consts, expr)?;

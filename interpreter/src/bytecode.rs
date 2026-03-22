@@ -117,6 +117,17 @@ pub enum Instruction {
     Jump(usize),
     JumpIfFalse(usize),
     Pop,
+
+    NewArray(String, TypesCheck),
+    ArrayStore(String),
+    ArrayLoad(String),
+    ArrayLen(String),
+
+    NewArrayLit(usize),
+    NewArrayFill,
+
+    ArrayLoadDeep(String, usize),
+    ArrayStoreDeep(String, usize),
 }
 
 #[inline(always)]
@@ -137,6 +148,7 @@ pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Fun
     funcs_rt.insert("sin".to_owned(), ReturnType::Float);
     funcs_rt.insert("cos".to_owned(), ReturnType::Float);
     funcs_rt.insert("sqrt".to_owned(), ReturnType::Float);
+    funcs_rt.insert("len".to_owned(), ReturnType::Number);
 
     for node in &ast {
         if let AstKind::Func {
@@ -248,6 +260,127 @@ fn main_compile(
                 .unwrap_or(false);
             if has_value {
                 push_node(out, Instruction::Pop, line);
+            }
+        }
+        AstKind::ArrayDecl {
+            name,
+            elem_type,
+            sizes,
+            init,
+            is_const: _,
+        } => {
+            if let AstKind::Array(elems) = init.as_ref() {
+                let fill_value: Option<&AstKind> = if elems.len() == 1 {
+                    if let AstKind::Array(inner) = &elems[0] {
+                        if inner.len() == 1 {
+                            Some(&inner[0])
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else if !elems.is_empty()
+                    && elems
+                        .iter()
+                        .all(|e| matches!(e, AstKind::Array(inner) if inner.len() == 1))
+                {
+                    if let AstKind::Array(inner) = &elems[0] {
+                        Some(&inner[0])
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(fill) = fill_value {
+                    if !sizes.is_empty() {
+                        for sz in &sizes {
+                            expr_compile(out, *sz.clone(), line)?;
+                        }
+
+                        expr_compile(out, fill.clone(), line)?;
+                        for _ in 0..sizes.len() {
+                            push_node(out, Instruction::NewArrayFill, line);
+                        }
+
+                        push_node(out, Instruction::StoreLocal(name), line);
+                    } else {
+                        return Err(errors::A15.to_owned());
+                    }
+                } else {
+                    let n = elems.len();
+                    for el in elems {
+                        expr_compile(out, el.clone(), line)?;
+                    }
+
+                    push_node(out, Instruction::PushInt(n as i64), line);
+                    push_node(out, Instruction::NewArray(name, elem_type), line);
+                }
+            } else {
+                return Err(errors::A15.to_owned());
+            }
+        }
+        AstKind::ArraySet {
+            name,
+            indices,
+            op,
+            expr,
+            elem_type,
+        } => {
+            let depth = indices.len();
+            if op != Token::Assign {
+                for idx in &indices {
+                    expr_compile(out, idx.clone(), line)?;
+                }
+
+                if depth == 1 {
+                    push_node(out, Instruction::ArrayLoad(name.clone()), line);
+                } else {
+                    push_node(out, Instruction::ArrayLoadDeep(name.clone(), depth), line);
+                }
+
+                expr_compile(out, *expr, line)?;
+                let inst = match (op, &elem_type) {
+                    (Token::PlusAssign, TypesCheck::Float) => Instruction::AddFloat,
+                    (Token::PlusAssign, _) => Instruction::AddInt,
+                    (Token::MinusAssign, TypesCheck::Float) => Instruction::SubFloat,
+                    (Token::MinusAssign, _) => Instruction::SubInt,
+                    (Token::MultiplyAssign, TypesCheck::Float) => Instruction::MulFloat,
+                    (Token::MultiplyAssign, _) => Instruction::MulInt,
+                    (Token::DivideAssign, TypesCheck::Float) => Instruction::DivFloat,
+                    (Token::DivideAssign, _) => Instruction::DivInt,
+                    (Token::ModAssign, _) => Instruction::ModInt,
+                    _ => Instruction::AddInt,
+                };
+
+                push_node(out, inst, line);
+                for idx in indices {
+                    expr_compile(out, idx, line)?;
+                }
+            } else {
+                expr_compile(out, *expr, line)?;
+                for idx in indices {
+                    expr_compile(out, idx, line)?;
+                }
+            }
+            if depth == 1 {
+                push_node(out, Instruction::ArrayStore(name), line);
+            } else {
+                push_node(out, Instruction::ArrayStoreDeep(name, depth), line);
+            }
+        }
+        AstKind::ArrayGet { name, indices } => {
+            let depth = indices.len();
+            for idx in indices {
+                expr_compile(out, idx, line)?;
+            }
+
+            if depth == 1 {
+                push_node(out, Instruction::ArrayLoad(name), line);
+            } else {
+                push_node(out, Instruction::ArrayLoadDeep(name, depth), line);
             }
         }
         AstKind::Assign {
@@ -366,6 +499,11 @@ fn main_compile(
         } => {
             for_compile(out, var_name, *start, *end, *step, body, line, funcs_rt)?;
         }
+        AstKind::ForIn {
+            var_name,
+            array_name,
+            body,
+        } => for_in_compile(out, var_name, array_name, body, line, funcs_rt)?,
         _ => unreachable!(),
     }
 
@@ -435,6 +573,47 @@ fn while_compile(
     push_node(out, Instruction::Jump(loop_start), line);
     let end = out.len();
     out[jif_idx].instruction = Instruction::JumpIfFalse(end);
+    Ok(())
+}
+
+fn for_in_compile(
+    out: &mut Vec<Node>,
+    var_name: String,
+    array_name: String,
+    body: Vec<AstNode>,
+    line: usize,
+    funcs_rt: &HashMap<String, ReturnType>,
+) -> Result<(), String> {
+    let idx_var = format!("\x00fi_{}", var_name);
+    push_node(out, Instruction::PushInt(0), line);
+    push_node(out, Instruction::StoreLocal(idx_var.clone()), line);
+
+    let loop_start = out.len();
+
+    push_node(out, Instruction::Load(idx_var.clone()), line);
+    push_node(out, Instruction::ArrayLen(array_name.clone()), line);
+    push_node(out, Instruction::GtInt, line);
+
+    let jif_idx = out.len();
+    push_node(out, Instruction::JumpIfFalse(0), line);
+
+    push_node(out, Instruction::Load(idx_var.clone()), line);
+    push_node(out, Instruction::ArrayLoad(array_name.clone()), line);
+    push_node(out, Instruction::StoreLocal(var_name.clone()), line);
+
+    for node in body {
+        main_compile(node.kind, out, node.line, funcs_rt)?;
+    }
+
+    push_node(out, Instruction::Load(idx_var.clone()), line);
+    push_node(out, Instruction::PushInt(1), line);
+    push_node(out, Instruction::AddInt, line);
+    push_node(out, Instruction::StoreLocal(idx_var), line);
+
+    push_node(out, Instruction::Jump(loop_start), line);
+    let end_idx = out.len();
+    out[jif_idx].instruction = Instruction::JumpIfFalse(end_idx);
+
     Ok(())
 }
 
@@ -522,6 +701,26 @@ fn expr_compile(out: &mut Vec<Node>, value: AstKind, line: usize) -> Result<(), 
             }
             push_node(out, Instruction::CallFunc(name, argc), line);
         }
+        AstKind::ArrayGet { name, indices } => {
+            let depth = indices.len();
+            for idx in indices {
+                expr_compile(out, idx, line)?;
+            }
+
+            if depth == 1 {
+                push_node(out, Instruction::ArrayLoad(name), line);
+            } else {
+                push_node(out, Instruction::ArrayLoadDeep(name, depth), line);
+            }
+        }
+        AstKind::Array(elems) => {
+            let n = elems.len();
+            for el in elems {
+                expr_compile(out, el, line)?;
+            }
+            
+            push_node(out, Instruction::NewArrayLit(n), line);
+        }
         AstKind::BinaryOp {
             left,
             op,
@@ -550,25 +749,25 @@ fn cast_inst(op: &Cast, src: &TypesCheck) -> Instruction {
             TypesCheck::Number => Instruction::IntToStr,
             TypesCheck::Float => Instruction::FloatToStr,
             TypesCheck::Boolean => Instruction::BoolToStr,
-            TypesCheck::String => unreachable!(),
+            _ => unreachable!(),
         },
         Cast::Number => match src {
             TypesCheck::Float => Instruction::FloatToInt,
             TypesCheck::Boolean => Instruction::BoolToInt,
             TypesCheck::String => Instruction::StrToInt,
-            TypesCheck::Number => unreachable!(),
+            _ => unreachable!(),
         },
         Cast::Float => match src {
             TypesCheck::Number => Instruction::IntToFloat,
             TypesCheck::Boolean => Instruction::BoolToFloat,
             TypesCheck::String => Instruction::StrToFloat,
-            TypesCheck::Float => unreachable!(),
+            _ => unreachable!(),
         },
         Cast::Boolean => match src {
             TypesCheck::Number => Instruction::IntToBool,
             TypesCheck::Float => Instruction::FloatToBool,
             TypesCheck::String => Instruction::StrToBool,
-            TypesCheck::Boolean => unreachable!(),
+            _ => unreachable!(),
         },
     }
 }
@@ -612,12 +811,14 @@ fn binary_op_inst(op: Token, lt: &TypesCheck, rt: &TypesCheck) -> Instruction {
             TypesCheck::Float => Instruction::EqFloat,
             TypesCheck::String => Instruction::EqStr,
             TypesCheck::Boolean => Instruction::EqBool,
+            _ => unreachable!(),
         },
         Token::NotEqual => match lt {
             TypesCheck::Number => Instruction::NeInt,
             TypesCheck::Float => Instruction::NeFloat,
             TypesCheck::String => Instruction::NeStr,
             TypesCheck::Boolean => Instruction::NeBool,
+            _ => unreachable!(),
         },
         Token::Greater => match lt {
             TypesCheck::Float => Instruction::GtFloat,

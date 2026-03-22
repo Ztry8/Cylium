@@ -206,6 +206,16 @@ fn dispatch(
                     }
                     return Ok(None);
                 }
+                "len" => {
+                    match stack.pop() {
+                        Some(Types::Array(arr)) => {
+                            stack.push(int(arr.len() as i64));
+                        }
+                        _ => return Err(errors::A48.to_owned()),
+                    }
+
+                    return Ok(None);
+                }
                 _ => {}
             }
 
@@ -263,6 +273,140 @@ fn dispatch(
                     .0
                     .clone(),
             );
+        }
+
+        Instruction::NewArray(name, _elem_type) => {
+            let count = pop_int(stack) as usize;
+            let mut arr: Vec<Types> = Vec::with_capacity(count);
+
+            for _ in 0..count {
+                arr.push(stack.pop().ok_or_else(|| errors::A15.to_owned())?);
+            }
+
+            arr.reverse();
+            if let Some(slot) = scope.get_mut(name) {
+                *slot = Types::Array(arr);
+            } else {
+                scope.declare(name.to_string(), Types::Array(arr), false);
+            }
+        }
+
+        Instruction::ArrayStore(name) => {
+            let index = pop_int(stack) as usize; 
+            let value = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
+
+            match scope.get_mut(name) {
+                Some(Types::Array(arr)) => {
+                    if index >= arr.len() {
+                        return Err(errors::A17.to_owned());
+                    }
+                    arr[index] = value;
+                }
+                _ => return Err(errors::A48.to_owned()),
+            }
+        }
+
+        Instruction::ArrayLoadDeep(name, depth) => {
+            let mut indices = Vec::with_capacity(*depth);
+            for _ in 0..*depth {
+                indices.push(pop_int(stack) as usize);
+            }
+
+            indices.reverse(); 
+
+            let base = match scope.get(consts, name) {
+                Some((v, _)) => v.clone(),
+                None => return Err(errors::A03.to_owned()),
+            };
+
+            let mut cur = base;
+            for idx in indices {
+                match cur {
+                    Types::Array(arr) => {
+                        if idx >= arr.len() {
+                            return Err(errors::A17.to_owned());
+                        }
+                        cur = arr[idx].clone();
+                    }
+                    _ => return Err(errors::A48.to_owned()),
+                }
+            }
+
+            stack.push(cur);
+        }
+
+        Instruction::ArrayStoreDeep(name, depth) => {
+            let mut indices = Vec::with_capacity(*depth);
+            for _ in 0..*depth {
+                indices.push(pop_int(stack) as usize);
+            }
+
+            indices.reverse();
+            let value = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
+
+            fn set_deep(
+                arr: &mut Vec<Types>,
+                indices: &[usize],
+                value: Types,
+            ) -> Result<(), String> {
+                let idx = indices[0];
+                if idx >= arr.len() {
+                    return Err(errors::A17.to_owned());
+                }
+                if indices.len() == 1 {
+                    arr[idx] = value;
+                } else {
+                    match &mut arr[idx] {
+                        Types::Array(inner) => set_deep(inner, &indices[1..], value)?,
+                        _ => return Err(errors::A48.to_owned()),
+                    }
+                }
+                Ok(())
+            }
+
+            match scope.get_mut(name) {
+                Some(Types::Array(arr)) => set_deep(arr, &indices, value)?,
+                _ => return Err(errors::A48.to_owned()),
+            }
+        }
+
+        Instruction::ArrayLen(name) => match scope.get(consts, name) {
+            Some((Types::Array(arr), _)) => {
+                stack.push(int(arr.len() as i64));
+            }
+            _ => return Err(errors::A48.to_owned()),
+        },
+
+        Instruction::NewArrayLit(n) => {
+            let mut arr = Vec::with_capacity(*n);
+            for _ in 0..*n {
+                arr.push(stack.pop().ok_or_else(|| errors::A15.to_owned())?);
+            }
+
+            arr.reverse();
+            stack.push(Types::Array(arr));
+        }
+
+        Instruction::NewArrayFill => {
+            let fill = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
+            let size = pop_int(stack) as usize;
+            let arr: Vec<Types> = (0..size).map(|_| fill.clone()).collect();
+            stack.push(Types::Array(arr));
+        }
+
+        Instruction::ArrayLoad(name) => {
+            let index = pop_int(stack) as usize;
+            let val = match scope.get(consts, name) {
+                Some((Types::Array(arr), _)) => {
+                    if index >= arr.len() {
+                        return Err(errors::A17.to_owned());
+                    }
+                    arr[index].clone()
+                }
+                _ => return Err(errors::A48.to_owned()),
+            };
+            
+            stack.push(val);
         }
 
         Instruction::PushInt(v) => stack.push(int(*v)),

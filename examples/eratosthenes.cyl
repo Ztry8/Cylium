@@ -1,0 +1,27 @@
+# Sieve of Eratosthenes in Cylium
+
+func main() -> number 
+    number n = input() as number
+    bool[n + 1] p = [[true]]
+
+    p[0] = false
+    p[1] = false
+
+    for i from 2 to n
+        if p[i]
+            number j = i * i 
+            while j <= n 
+                p[j] = false
+                j += i
+            endwhile
+        endif
+    endfor
+
+    for i from 2 to n 
+        if p[i]
+            echo(i)
+        endif
+    endfor
+
+    return 0
+end
