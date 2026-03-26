@@ -12,9 +12,9 @@
   * [x] Implement `for` loop
 
 * [x] Replace procedures with functions 
-* [x] Add arrays 
-* [ ] Add structures
-* [ ] Add references to variables
+* [ ] Add structures and enums
+  * [ ] Built-in result and option types
+* [ ] Add vectors type
 * [ ] Add `include` and support multi-file scripts
 
 * [ ] Replace interpreter with compilation 

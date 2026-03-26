@@ -14,4 +14,4 @@ editor/cylium
 
 benchmarks/build
 
-interpreter/test.cyl
+examples/test.cyl

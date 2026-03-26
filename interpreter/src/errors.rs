@@ -14,7 +14,7 @@ pub const A10: &str = "A10: Unclosed bracket.";
 pub const A15: &str = "A15: Invalid expression.";
 pub const A16: &str = "A16: Invalid type for arithmetic operation.";
 
-pub const A17: &str = "A17: Array index out of bounds.";
+// pub const A17: &str = "A17: Invalid vector index.";
 // pub const A18: &str = "A18: This operator can only be used with strings.";
 
 pub const A19: &str = "A19: Cannot convert value to vector.";
@@ -30,7 +30,7 @@ pub const A27: &str = "A27: Arguments count do not match.";
 pub const A28: &str = "A28: Cannot delete a constant variable.";
 
 pub const A29: &str = "A29: Expected variable name to delete.";
-pub const A30: &str = "A30: Array size must be a positive number.";
+// pub const A30: &str = "A30: This operator can only be used with vectors.";
 
 pub const A34: &str = "A34: Invalid number.";
 pub const A35: &str = "A35: Cannot convert value to logical type.";
@@ -51,9 +51,6 @@ pub const A44: &str = "A44: Cannot divide a number by zero.";
 pub const A45: &str = "A45: Cannot root a negative number.";
 
 pub const A46: &str = "A46: Non-void function must always return a value.";
-pub const A47: &str = "A47: Array element type does not match.";
-
-pub const A48: &str = "A48: Cannot index a non-array variable.";
 
 //
 

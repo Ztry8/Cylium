@@ -94,30 +94,6 @@ pub enum AstKind {
         step: Box<Option<AstKind>>,
         body: Vec<AstNode>,
     },
-    ForIn {
-        var_name: String,
-        array_name: String,
-        body: Vec<AstNode>,
-    },
-    Array(Vec<AstKind>),
-    ArrayDecl {
-        name: String,
-        elem_type: TypesCheck,
-        sizes: Vec<Box<AstKind>>,
-        init: Box<AstKind>,
-        is_const: bool,
-    },
-    ArrayGet {
-        name: String,
-        indices: Vec<AstKind>,
-    },
-    ArraySet {
-        name: String,
-        indices: Vec<AstKind>,
-        op: Token,
-        expr: Box<AstKind>,
-        elem_type: TypesCheck,
-    },
 }
 
 #[derive(Debug, Clone)]
@@ -185,25 +161,6 @@ impl Parser {
         }
     }
 
-    fn parse_array_init(&mut self) -> Result<AstKind, String> {
-        let mut elems = Vec::new();
-
-        if self.current_token() != Some(&Token::CloseBracket) {
-            elems.push(self.parse_expr(0)?);
-            while self.current_token() == Some(&Token::Comma) {
-                self.pos += 1;
-                elems.push(self.parse_expr(0)?);
-            }
-        }
-
-        if self.current_token() != Some(&Token::CloseBracket) {
-            return Err(errors::A10.to_owned());
-        }
-
-        self.pos += 1;
-        Ok(AstKind::Array(elems))
-    }
-
     fn parse_var(&mut self) -> Result<AstNode, String> {
         let is_const = self.current_token() == Some(&Token::Const);
 
@@ -211,7 +168,7 @@ impl Parser {
             self.pos += 1;
         }
 
-        let mut type_ = match self.current_token() {
+        let type_ = match self.current_token() {
             Some(Token::Number) => TypesCheck::Number,
             Some(Token::Float) => TypesCheck::Float,
             Some(Token::String) => TypesCheck::String,
@@ -220,37 +177,6 @@ impl Parser {
         };
 
         self.pos += 1;
-
-        let mut sizes: Vec<Box<AstKind>> = Vec::new();
-        let is_array = if self.current_token() == Some(&Token::OpenBracket) {
-            self.pos += 1;
-
-            if self.current_token() != Some(&Token::CloseBracket) {
-                sizes.push(Box::new(self.parse_expr(0)?));
-            }
-
-            if self.current_token() != Some(&Token::CloseBracket) {
-                return Err(errors::A10.to_owned());
-            }
-
-            self.pos += 1;
-            while self.current_token() == Some(&Token::OpenBracket) {
-                type_ = TypesCheck::Array(Box::new(type_));
-                self.pos += 1;
-                if self.current_token() != Some(&Token::CloseBracket) {
-                    sizes.push(Box::new(self.parse_expr(0)?));
-                }
-                if self.current_token() != Some(&Token::CloseBracket) {
-                    return Err(errors::A10.to_owned());
-                }
-                self.pos += 1;
-            }
-
-            true
-        } else {
-            false
-        };
-
         if let Some(Token::Ident(name)) = self.current_token().cloned() {
             self.pos += 1;
 
@@ -260,26 +186,6 @@ impl Parser {
 
             if self.current_token() == Some(&Token::Assign) {
                 self.pos += 1;
-
-                if is_array {
-                    if self.current_token() != Some(&Token::OpenBracket) {
-                        return Err(errors::A15.to_owned());
-                    }
-
-                    self.pos += 1;
-                    let init = self.parse_array_init()?;
-
-                    return Ok(node!(
-                        self.line,
-                        AstKind::ArrayDecl {
-                            name,
-                            elem_type: type_,
-                            sizes,
-                            init: Box::new(init),
-                            is_const,
-                        }
-                    ));
-                }
 
                 Ok(node!(
                     self.line,
@@ -304,7 +210,7 @@ impl Parser {
         if self.current_token() != Some(&Token::Comma) {
             if !matches!(
                 self.current_token(),
-                None | Some(Token::To) | Some(Token::Step) | Some(Token::CloseParen)
+                None | Some(Token::To) | Some(Token::Step) | Some(Token::CloseParen) 
             ) {
                 return Err(errors::A15.to_owned());
             }
@@ -340,6 +246,7 @@ impl Parser {
             return Err(errors::A15.to_owned());
         }
 
+        // Ok(AstKind::Vector(values))
         todo!()
     }
 
@@ -373,19 +280,6 @@ impl Parser {
                 if self.current_token() == Some(&Token::OpenParen) {
                     let args = self.parse_call_args()?;
                     AstKind::FuncCall { name, args }
-                } else if self.current_token() == Some(&Token::OpenBracket) {
-                    let mut indices = Vec::new();
-
-                    while self.current_token() == Some(&Token::OpenBracket) {
-                        self.pos += 1;
-                        indices.push(self.parse_expr(0)?);
-                        if self.current_token() != Some(&Token::CloseBracket) {
-                            return Err(errors::A10.to_owned());
-                        }
-                        self.pos += 1;
-                    }
-
-                    AstKind::ArrayGet { name, indices }
                 } else {
                     AstKind::Ident(name)
                 }
@@ -421,11 +315,6 @@ impl Parser {
             Some(Token::BooleanValue(v)) => {
                 self.pos += 1;
                 AstKind::Boolean(v)
-            }
-            Some(Token::OpenBracket) => {
-                self.pos += 1;
-                let arr = self.parse_array_init()?;
-                arr
             }
             _ => return Err(errors::A15.to_owned()),
         };
@@ -527,7 +416,7 @@ impl Parser {
             }
             self.pos += 1;
 
-            let mut type_ = match self.current_token() {
+            let type_ = match self.current_token() {
                 Some(Token::Number) => TypesCheck::Number,
                 Some(Token::Float) => TypesCheck::Float,
                 Some(Token::String) => TypesCheck::String,
@@ -535,16 +424,6 @@ impl Parser {
                 _ => return Err(errors::A15.to_owned()),
             };
             self.pos += 1;
-
-            while self.current_token() == Some(&Token::OpenBracket) {
-                self.pos += 1;
-                if self.current_token() != Some(&Token::CloseBracket) {
-                    return Err(errors::A10.to_owned());
-                }
-                self.pos += 1;
-                type_ = TypesCheck::Array(Box::new(type_));
-            }
-
             args.push((arg, type_));
 
             if self.current_token() == Some(&Token::Comma) {
@@ -709,36 +588,6 @@ impl Parser {
                 }?;
 
                 self.pos += 1;
-
-                if self.current_token() == Some(&Token::In) {
-                    self.pos += 1;
-
-                    let array_name = if let Some(Token::Ident(arr)) = self.current_token().cloned()
-                    {
-                        self.pos += 1;
-                        arr
-                    } else {
-                        return Err(errors::A15.to_owned());
-                    };
-
-                    let mut body = Vec::new();
-                    self.next_line();
-
-                    while self.current_token().cloned() != Some(Token::EndFor) {
-                        body.push(self.parse_main()?);
-                        self.next_line();
-                    }
-
-                    return Ok(node!(
-                        self.line,
-                        AstKind::ForIn {
-                            var_name: name,
-                            array_name,
-                            body,
-                        }
-                    ));
-                }
-
                 if self.current_token() != Some(&Token::From) {
                     return Err(errors::A15.to_owned());
                 }
@@ -843,49 +692,6 @@ impl Parser {
             Some(Token::Ident(receiver)) => {
                 let next = self.tokens.get(self.line).and_then(|l| l.get(self.pos + 1));
                 match next {
-                    Some(Token::OpenBracket) => {
-                        self.pos += 1;
-
-                        let mut indices = Vec::new();
-                        while self.current_token() == Some(&Token::OpenBracket) {
-                            self.pos += 1;
-
-                            indices.push(self.parse_expr(0)?);
-                            if self.current_token() != Some(&Token::CloseBracket) {
-                                return Err(errors::A10.to_owned());
-                            }
-
-                            self.pos += 1;
-                        }
-
-                        let op = self
-                            .current_token()
-                            .cloned()
-                            .ok_or_else(|| errors::A15.to_owned())?;
-
-                        match op {
-                            Token::Assign
-                            | Token::PlusAssign
-                            | Token::MinusAssign
-                            | Token::MultiplyAssign
-                            | Token::DivideAssign
-                            | Token::ModAssign => {
-                                self.pos += 1;
-                                let expr = self.parse_value()?;
-                                Ok(node!(
-                                    self.line,
-                                    AstKind::ArraySet {
-                                        name: receiver,
-                                        indices,
-                                        op,
-                                        expr: Box::new(expr),
-                                        elem_type: TypesCheck::Number,
-                                    }
-                                ))
-                            }
-                            _ => Err(errors::A15.to_owned()),
-                        }
-                    }
                     Some(Token::Assign)
                     | Some(Token::PlusAssign)
                     | Some(Token::MinusAssign)
