@@ -170,6 +170,25 @@ fn main_check(
 
                     return Ok(());
                 }
+                "unix_time" => {
+                    if !args.is_empty() {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    return Ok(());
+                }
+                "sleep" => {
+                    if args.len() != 1 {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    if t != TypesCheck::Number {
+                        return Err(errors::A42.to_owned());
+                    }
+
+                    return Ok(());
+                }
                 _ => {}
             }
 
@@ -456,6 +475,13 @@ fn expr_check(
                         _ => Err(errors::A27.to_owned()),
                     };
                 }
+                "unix_time" => {
+                    return match argc {
+                        0 => Ok(TypesCheck::Number),
+                        _ => Err(errors::A27.to_owned()),
+                    };
+                }
+                "sleep" => return Err(errors::A47.to_owned()),
                 _ => {}
             }
 
@@ -465,7 +491,7 @@ fn expr_check(
                     ReturnType::Float => Ok(TypesCheck::Float),
                     ReturnType::String => Ok(TypesCheck::String),
                     ReturnType::Boolean => Ok(TypesCheck::Boolean),
-                    ReturnType::Void => Err(errors::A15.to_owned()),
+                    ReturnType::Void => Err(errors::A47.to_owned()),
                 }
             } else {
                 Err(errors::A24.to_owned())

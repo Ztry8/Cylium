@@ -1,0 +1,15 @@
+func main() -> number
+    echo("January 1, 1970 was " + unix_time() + " seconds ago!")
+
+    for seconds from 1 to 5
+        sleep(1000)
+
+        if seconds == 1
+            echo(seconds + " second have elapsed since the program started")
+        else 
+            echo(seconds + " seconds have elapsed since the program started")
+        end
+    end
+
+    return 0
+end

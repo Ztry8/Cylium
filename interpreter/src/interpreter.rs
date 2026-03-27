@@ -3,6 +3,7 @@
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
 use std::collections::HashMap;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{
     bytecode::{Func, Instruction, Node},
@@ -246,6 +247,23 @@ fn dispatch(
 
                     return Ok(None);
                 }
+                "unix_time" => {
+                    stack.push(int(match SystemTime::now().duration_since(UNIX_EPOCH) {
+                        Ok(n) => n,
+                        Err(n) => {
+                            FileHandler::show_warning(errors::C03);
+                            n.duration()
+                        }
+                    }
+                    .as_secs() as i64));
+
+                    return Ok(None);
+                }
+                "sleep" => {
+                    std::thread::sleep(Duration::from_millis(pop_int(stack) as u64));
+
+                    return Ok(None);
+                }
                 _ => {}
             }
 
@@ -420,8 +438,8 @@ fn dispatch(
         }
 
         Instruction::ConcatStr => {
-            let b = pop_str(stack);
             let a = pop_str(stack);
+            let b = pop_str(stack);
             stack.push(str_(a + &b));
         }
         Instruction::ConcatStrInt => {

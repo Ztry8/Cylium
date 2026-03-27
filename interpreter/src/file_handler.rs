@@ -25,7 +25,7 @@ impl FileHandler {
 
     fn get_error(line_number: usize, line: &str, error: &str) -> String {
         format!(
-            "{}|{}\nError {}\nFor details, visit: https://cylium.site/materials/errors",
+            "{}| {}\nError {}\nFor details, visit: https://cylium.site/materials/errors",
             line_number + 1,
             line,
             error,

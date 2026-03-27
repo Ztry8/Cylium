@@ -51,7 +51,9 @@ pub const A44: &str = "A44: Cannot divide a number by zero.";
 pub const A45: &str = "A45: Cannot root a negative number.";
 
 pub const A46: &str = "A46: Non-void function must always return a value.";
+pub const A47: &str = "A47: Function returns a void.";
 
 //
 
 pub const C02: &str = "C02: Failed to read input.";
+pub const C03: &str = "C03: System time goes before the Unix epoch.";
