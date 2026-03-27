@@ -210,7 +210,7 @@ impl Parser {
         if self.current_token() != Some(&Token::Comma) {
             if !matches!(
                 self.current_token(),
-                None | Some(Token::To) | Some(Token::Step) | Some(Token::CloseParen) 
+                None | Some(Token::To) | Some(Token::Step) | Some(Token::CloseParen)
             ) {
                 return Err(errors::A15.to_owned());
             }

@@ -73,6 +73,25 @@ pub fn execute(handler: &FileHandler, program: HashMap<String, Func>, const_node
     consts.declare("PI".to_owned(), flt(std::f64::consts::PI), true);
     consts.declare("E".to_owned(), flt(std::f64::consts::E), true);
 
+    consts.declare("IS_LINUX".to_owned(), bl(cfg!(target_os = "linux")), true);
+    consts.declare("IS_MACOS".to_owned(), bl(cfg!(target_os = "macos")), true);
+    consts.declare(
+        "IS_WINDOWS".to_owned(),
+        bl(cfg!(target_os = "windows")),
+        true,
+    );
+
+    consts.declare(
+        "IS_X86_64".to_owned(),
+        bl(cfg!(target_arch = "x86_64")),
+        true,
+    );
+    consts.declare(
+        "IS_ARM64".to_owned(),
+        bl(cfg!(target_arch = "aarch64")),
+        true,
+    );
+
     for node in const_nodes {
         match node.instruction {
             Instruction::StoreConst(name) => {
@@ -204,6 +223,27 @@ fn dispatch(
                     } else {
                         return Err(errors::A45.to_owned());
                     }
+                    return Ok(None);
+                }
+                "shell" => {
+                    let cmd = pop_str(stack);
+
+                    let status = if cfg!(target_os = "windows") {
+                        std::process::Command::new("cmd")
+                            .args(["/C", &cmd])
+                            .status()
+                    } else {
+                        std::process::Command::new("sh")
+                            .arg("-c")
+                            .arg(&cmd)
+                            .status()
+                    };
+
+                    stack.push(int(match status {
+                        Ok(status) => status.code().unwrap_or(-1),
+                        Err(_) => -1,
+                    } as i64));
+
                     return Ok(None);
                 }
                 _ => {}

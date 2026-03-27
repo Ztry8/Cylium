@@ -12,11 +12,20 @@ use crate::{
     types::{ReturnType, TypesCheck},
 };
 
+type Functions = HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>;
+
 pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     let mut consts = HashMap::new();
 
     consts.insert("PI".to_owned(), TypesCheck::Float);
     consts.insert("E".to_owned(), TypesCheck::Float);
+
+    consts.insert("IS_LINUX".to_owned(), TypesCheck::Boolean);
+    consts.insert("IS_MACOS".to_owned(), TypesCheck::Boolean);
+    consts.insert("IS_WINDOWS".to_owned(), TypesCheck::Boolean);
+
+    consts.insert("IS_X86_64".to_owned(), TypesCheck::Boolean);
+    consts.insert("IS_ARM64".to_owned(), TypesCheck::Boolean);
 
     let mut funcs: HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)> = HashMap::new();
 
@@ -102,7 +111,7 @@ fn always_returns(body: &[AstNode]) -> bool {
 }
 
 fn main_check(
-    funcs: &HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>,
+    funcs: &Functions,
     variables: &mut HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &mut AstKind,
@@ -144,6 +153,18 @@ fn main_check(
 
                     let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
                     if t != TypesCheck::Float {
+                        return Err(errors::A42.to_owned());
+                    }
+
+                    return Ok(());
+                }
+                "shell" => {
+                    if args.len() != 1 {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    if t != TypesCheck::String {
                         return Err(errors::A42.to_owned());
                     }
 
@@ -344,7 +365,7 @@ fn main_check(
 }
 
 fn expr_annotate(
-    funcs: &HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>,
+    funcs: &Functions,
     variables: &HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &mut AstKind,
@@ -369,9 +390,7 @@ fn expr_annotate(
 
             expr_check(funcs, variables, consts, node)
         }
-        AstKind::Ident(_) => {
-            expr_check(funcs, variables, consts, node)
-        }
+        AstKind::Ident(_) => expr_check(funcs, variables, consts, node),
         AstKind::BinaryOp {
             left,
             right,
@@ -390,7 +409,7 @@ fn expr_annotate(
 }
 
 fn expr_check(
-    funcs: &HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>,
+    funcs: &Functions,
     variables: &HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &AstKind,
@@ -409,10 +428,34 @@ fn expr_check(
                 Err(errors::A03.to_owned())
             }
         }
-        AstKind::FuncCall { name, .. } => {
+        AstKind::FuncCall { name, args } => {
+            let argc = args.len();
+
             match name.as_str() {
-                "input" => return Ok(TypesCheck::String),
-                "sin" | "cos" | "sqrt" => return Ok(TypesCheck::Float),
+                "input" => {
+                    return match argc {
+                        0 => Ok(TypesCheck::String),
+                        _ => Err(errors::A27.to_owned()),
+                    };
+                }
+                "sin" | "cos" | "sqrt" => {
+                    return match argc {
+                        1 => match expr_check(funcs, variables, consts, &args[0])? {
+                            TypesCheck::Float => Ok(TypesCheck::Float),
+                            _ => Err(errors::A42.to_owned()),
+                        },
+                        _ => Err(errors::A27.to_owned()),
+                    };
+                }
+                "shell" => {
+                    return match argc {
+                        1 => match expr_check(funcs, variables, consts, &args[0])? {
+                            TypesCheck::String => Ok(TypesCheck::Number),
+                            _ => Err(errors::A42.to_owned()),
+                        },
+                        _ => Err(errors::A27.to_owned()),
+                    };
+                }
                 _ => {}
             }
 

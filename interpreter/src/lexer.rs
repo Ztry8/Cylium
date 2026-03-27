@@ -12,27 +12,27 @@ pub enum Token {
     StringValue(String),
     BooleanValue(bool),
 
-    As,       // as
-    While,    // while
-    For,      // for
-    From,     // from
-    To,       // to
-    Step,     // step
-    Number,   // number
-    Float,    // float
-    String,   // string
-    Void,     // void
-    Bool,     // bool
-    Const,    // const
-    If,       // if
-    Else,     // else
-    Echo,     // echo
-    Exit,     // exit
-    Delete,   // delete
-    Func,     // func
-    End,      // end
-    Return,   // return
-    Arrow,    // ->
+    As,     // as
+    While,  // while
+    For,    // for
+    From,   // from
+    To,     // to
+    Step,   // step
+    Number, // number
+    Float,  // float
+    String, // string
+    Void,   // void
+    Bool,   // bool
+    Const,  // const
+    If,     // if
+    Else,   // else
+    Echo,   // echo
+    Exit,   // exit
+    Delete, // delete
+    Func,   // func
+    End,    // end
+    Return, // return
+    Arrow,  // ->
 
     Plus,           // +
     Minus,          // -

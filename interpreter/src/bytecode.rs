@@ -137,6 +137,7 @@ pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Fun
     funcs_rt.insert("sin".to_owned(), ReturnType::Float);
     funcs_rt.insert("cos".to_owned(), ReturnType::Float);
     funcs_rt.insert("sqrt".to_owned(), ReturnType::Float);
+    funcs_rt.insert("shell".to_owned(), ReturnType::Number);
 
     for node in &ast {
         if let AstKind::Func {

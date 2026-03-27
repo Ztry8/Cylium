@@ -1,0 +1,11 @@
+func main() -> number 
+    if IS_LINUX 
+        shell("echo Running on Linux!")
+    else if IS_MACOS 
+        shell("echo Running on macOS!")
+    else if IS_WINDOWS 
+        shell("echo Running on Windows!")
+    end
+
+    return 0
+end

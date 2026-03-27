@@ -38,7 +38,7 @@ pub const A35: &str = "A35: Cannot convert value to logical type.";
 // pub const A36: &str = "A36: Cannot convert value to string type.";
 pub const A37: &str = "A37: Constant declared more than one time.";
 
-pub const A38: &str = "A38: function declared more than one time.";
+pub const A38: &str = "A38: Function declared more than one time.";
 pub const A39: &str = "A39: Invalid type for logical operation.";
 
 pub const A40: &str = "A40: Variable is already of the target type.";
