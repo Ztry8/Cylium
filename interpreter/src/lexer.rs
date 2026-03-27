@@ -14,12 +14,10 @@ pub enum Token {
 
     As,       // as
     While,    // while
-    EndWhile, // endwhile
     For,      // for
     From,     // from
     To,       // to
     Step,     // step
-    EndFor,   // endfor
     Number,   // number
     Float,    // float
     String,   // string
@@ -28,7 +26,6 @@ pub enum Token {
     Const,    // const
     If,       // if
     Else,     // else
-    EndIf,    // endif
     Echo,     // echo
     Exit,     // exit
     Delete,   // delete
@@ -307,13 +304,10 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                         "const" => tokens.push(Token::Const),
                         "if" => tokens.push(Token::If),
                         "else" => tokens.push(Token::Else),
-                        "endif" => tokens.push(Token::EndIf),
-                        "endwhile" => tokens.push(Token::EndWhile),
                         "for" => tokens.push(Token::For),
                         "from" => tokens.push(Token::From),
                         "to" => tokens.push(Token::To),
                         "step" => tokens.push(Token::Step),
-                        "endfor" => tokens.push(Token::EndFor),
                         "echo" => tokens.push(Token::Echo),
                         "exit" => tokens.push(Token::Exit),
                         "delete" => tokens.push(Token::Delete),

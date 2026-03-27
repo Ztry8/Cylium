@@ -561,7 +561,7 @@ impl Parser {
 
                 let mut body = Vec::new();
 
-                while self.current_token().cloned() != Some(Token::EndWhile) {
+                while self.current_token().cloned() != Some(Token::End) {
                     body.push(self.parse_main()?);
                     self.next_line();
                 }
@@ -612,7 +612,7 @@ impl Parser {
                 let mut body = Vec::new();
 
                 self.next_line();
-                while self.current_token().cloned() != Some(Token::EndFor) {
+                while self.current_token().cloned() != Some(Token::End) {
                     body.push(self.parse_main()?);
                     self.next_line();
                 }
@@ -637,14 +637,14 @@ impl Parser {
 
                 while !matches!(
                     self.current_token().cloned(),
-                    Some(Token::EndIf) | Some(Token::Else)
+                    Some(Token::End) | Some(Token::Else)
                 ) {
                     body.push(self.parse_main()?);
                     self.next_line();
                 }
 
                 match self.current_token().cloned() {
-                    Some(Token::EndIf) => Ok(node!(
+                    Some(Token::End) => Ok(node!(
                         self.line,
                         AstKind::Condition {
                             expr: Box::new(expr),
@@ -669,7 +669,7 @@ impl Parser {
 
                                 let mut else_body = Vec::new();
 
-                                while self.current_token().cloned() != Some(Token::EndIf) {
+                                while self.current_token().cloned() != Some(Token::End) {
                                     else_body.push(self.parse_main()?);
                                     self.next_line();
                                 }
