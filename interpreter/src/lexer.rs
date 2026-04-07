@@ -74,10 +74,9 @@ pub enum Token {
     CloseParen,   // )
     OpenBracket,  // [
     CloseBracket, // ]
-    OpenBrace,    // {
-    CloseBrace,   // }
     Comma,        // ,
     Colon,        // :
+    Semicolon,    //;
 }
 
 pub fn tokenize_file(handler: &FileHandler) -> Vec<Vec<Token>> {
@@ -139,10 +138,9 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
             ')' => tokens.push(Token::CloseParen),
             '[' => tokens.push(Token::OpenBracket),
             ']' => tokens.push(Token::CloseBracket),
-            '{' => tokens.push(Token::OpenBrace),
-            '}' => tokens.push(Token::CloseBrace),
             ',' => tokens.push(Token::Comma),
             ':' => tokens.push(Token::Colon),
+            ';' => tokens.push(Token::Semicolon),
 
             '+' => tokens.push(check(&chars, &mut i, Token::Plus, Token::PlusAssign, None)),
             '-' => {
@@ -282,12 +280,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                     }
                 } else if chars[i].is_alphabetic() || chars[i] == '_' {
                     let mut ident = String::new();
-                    while i < chars.len()
-                        && (chars[i].is_alphanumeric()
-                            || chars[i] == '_'
-                            || chars[i] == '['
-                            || chars[i] == ']')
-                    {
+                    while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
                         ident.push(chars[i]);
                         i += 1;
                     }

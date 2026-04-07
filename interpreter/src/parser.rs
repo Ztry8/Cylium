@@ -94,6 +94,22 @@ pub enum AstKind {
         step: Box<Option<AstKind>>,
         body: Vec<AstNode>,
     },
+    ArrayLiteral {
+        values: Vec<AstKind>,
+    },
+    ArrayFill {
+        size: Box<AstKind>,
+        value: Box<AstKind>,
+    },
+    ArraySet {
+        name: String,
+        index: Box<AstKind>,
+        expr: Box<AstKind>,
+    },
+    ArrayGet {
+        name: String,
+        index: Box<AstKind>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +177,37 @@ impl Parser {
         }
     }
 
+    fn parse_array(&mut self) -> Result<AstKind, String> {
+        if self.current_token() != Some(&Token::OpenBracket) {
+            return Err(errors::A15.to_owned());
+        }
+
+        let mut values = Vec::new();
+
+        while !matches!(
+            self.current_token(),
+            Some(Token::CloseBracket) | Some(Token::Semicolon)
+        ) {
+            self.pos += 1;
+            values.push(self.parse_value()?);
+        }
+
+        if self.current_token() == Some(&Token::CloseBracket) {
+            self.pos += 1;
+
+            Ok(AstKind::ArrayLiteral { values })
+        } else if values.len() == 1 {
+            self.pos += 1;
+
+            Ok(AstKind::ArrayFill {
+                size: Box::new(values[0].clone()),
+                value: Box::new(self.parse_value()?),
+            })
+        } else {
+            Err(errors::A15.to_owned())
+        }
+    }
+
     fn parse_var(&mut self) -> Result<AstNode, String> {
         let is_const = self.current_token() == Some(&Token::Const);
 
@@ -176,7 +223,20 @@ impl Parser {
             _ => return Err(errors::A15.to_owned()),
         };
 
+        let mut array = false;
+
         self.pos += 1;
+        if self.current_token() == Some(&Token::OpenBracket) {
+            self.pos += 1;
+
+            if self.current_token() == Some(&Token::CloseBracket) {
+                array = true;
+                self.pos += 1;
+            } else {
+                return Err(errors::A15.to_owned());
+            }
+        }
+
         if let Some(Token::Ident(name)) = self.current_token().cloned() {
             self.pos += 1;
 
@@ -191,8 +251,16 @@ impl Parser {
                     self.line,
                     AstKind::VarDecl {
                         name,
-                        type_,
-                        value: Box::new(self.parse_value()?),
+                        type_: if array {
+                            TypesCheck::Array(Box::new(type_))
+                        } else {
+                            type_
+                        },
+                        value: Box::new(if array && let Ok(val) = self.parse_array() {
+                            val
+                        } else {
+                            self.parse_value()?
+                        }),
                         is_const,
                     }
                 ))
@@ -205,49 +273,7 @@ impl Parser {
     }
 
     pub fn parse_value(&mut self) -> Result<AstKind, String> {
-        let first = self.parse_expr(0)?;
-
-        if self.current_token() != Some(&Token::Comma) {
-            if !matches!(
-                self.current_token(),
-                None | Some(Token::To) | Some(Token::Step) | Some(Token::CloseParen)
-            ) {
-                return Err(errors::A15.to_owned());
-            }
-
-            return Ok(first);
-        }
-
-        if !matches!(
-            first,
-            AstKind::Number(_) | AstKind::Float(_) | AstKind::String(_) | AstKind::Boolean(_)
-        ) {
-            return Err(errors::A19.to_owned());
-        }
-
-        let mut values = vec![first];
-
-        while self.current_token() == Some(&Token::Comma) {
-            self.pos += 1;
-
-            let new = self.parse_expr(0)?;
-
-            if !matches!(
-                new,
-                AstKind::Number(_) | AstKind::Float(_) | AstKind::String(_) | AstKind::Boolean(_)
-            ) {
-                return Err(errors::A19.to_owned());
-            }
-
-            values.push(new);
-        }
-
-        if self.current_token().is_some() {
-            return Err(errors::A15.to_owned());
-        }
-
-        // Ok(AstKind::Vector(values))
-        todo!()
+        self.parse_expr(0)
     }
 
     fn parse_expr(&mut self, min_prec: u8) -> Result<AstKind, String> {
@@ -280,6 +306,19 @@ impl Parser {
                 if self.current_token() == Some(&Token::OpenParen) {
                     let args = self.parse_call_args()?;
                     AstKind::FuncCall { name, args }
+                } else if self.current_token() == Some(&Token::OpenBracket) {
+                    self.pos += 1;
+                    let index = self.parse_value()?;
+
+                    if self.current_token() != Some(&Token::CloseBracket) {
+                        return Err(errors::A15.to_owned());
+                    }
+
+                    self.pos += 1;
+                    AstKind::ArrayGet {
+                        name,
+                        index: Box::new(index),
+                    }
                 } else {
                     AstKind::Ident(name)
                 }
@@ -416,13 +455,24 @@ impl Parser {
             }
             self.pos += 1;
 
-            let type_ = match self.current_token() {
+            let mut type_ = match self.current_token() {
                 Some(Token::Number) => TypesCheck::Number,
                 Some(Token::Float) => TypesCheck::Float,
                 Some(Token::String) => TypesCheck::String,
                 Some(Token::Bool) => TypesCheck::Boolean,
                 _ => return Err(errors::A15.to_owned()),
             };
+
+            self.pos += 1;
+            if self.current_token() == Some(&Token::OpenBracket) {
+                self.pos += 1;
+                if self.current_token() != Some(&Token::CloseBracket) {
+                    return Err(errors::A15.to_owned());
+                }
+
+                type_ = TypesCheck::Array(Box::new(type_));
+            }
+
             self.pos += 1;
             args.push((arg, type_));
 
@@ -440,7 +490,7 @@ impl Parser {
         }
         self.pos += 1;
 
-        let return_type = match self.current_token() {
+        let mut return_type = match self.current_token() {
             Some(Token::Void) => ReturnType::Void,
             Some(Token::Number) => ReturnType::Number,
             Some(Token::Float) => ReturnType::Float,
@@ -448,7 +498,17 @@ impl Parser {
             Some(Token::Bool) => ReturnType::Boolean,
             _ => return Err(errors::A15.to_owned()),
         };
+
         self.pos += 1;
+        if self.current_token() == Some(&Token::OpenBracket) {
+            self.pos += 1;
+
+            if self.current_token() == Some(&Token::CloseBracket) {
+                return_type = ReturnType::Array(Box::new(return_type));
+            } else {
+                return Err(errors::A15.to_owned());
+            }
+        }
 
         let mut body = Vec::new();
         self.next_line();
@@ -475,10 +535,19 @@ impl Parser {
         let mut args = Vec::new();
 
         if self.current_token() != Some(&Token::CloseParen) {
-            args.push(self.parse_expr(0)?);
+            args.push(if self.current_token() == Some(&Token::OpenBracket) {
+                self.parse_array()?
+            } else {
+                self.parse_expr(0)?
+            });
+
             while self.current_token() == Some(&Token::Comma) {
                 self.pos += 1;
-                args.push(self.parse_expr(0)?);
+                args.push(if self.current_token() == Some(&Token::OpenBracket) {
+                    self.parse_array()?
+                } else {
+                    self.parse_expr(0)?
+                });
             }
         }
 
@@ -530,7 +599,13 @@ impl Parser {
                 } else {
                     Ok(node!(
                         self.line,
-                        AstKind::Return(Some(Box::new(self.parse_value()?)))
+                        AstKind::Return(Some(Box::new(
+                            if self.current_token() == Some(&Token::OpenBracket) {
+                                self.parse_array()?
+                            } else {
+                                self.parse_expr(0)?
+                            }
+                        )))
                     ))
                 }
             }
@@ -690,7 +765,26 @@ impl Parser {
                 }
             }
             Some(Token::Ident(receiver)) => {
-                let next = self.tokens.get(self.line).and_then(|l| l.get(self.pos + 1));
+                let mut next = self
+                    .tokens
+                    .get(self.line)
+                    .and_then(|l| l.get(self.pos + 1))
+                    .cloned();
+
+                let mut index = None;
+                if next == Some(Token::OpenBracket) {
+                    self.pos += 2;
+
+                    index = Some(self.parse_value()?);
+                    if self.current_token() != Some(&Token::CloseBracket) {
+                        return Err(errors::A15.to_owned());
+                    }
+
+                    self.pos += 1;
+                    next = self.current_token().cloned();
+                    self.pos -= 1;
+                }
+
                 match next {
                     Some(Token::Assign)
                     | Some(Token::PlusAssign)
@@ -708,15 +802,28 @@ impl Parser {
                             .current_token()
                             .cloned()
                             .ok_or_else(|| errors::A15.to_owned())?;
+
+                        if index.is_some() && op != Token::Assign {
+                            return Err(errors::A15.to_owned());
+                        }
+
                         self.pos += 1;
                         let expr = self.parse_value()?;
                         Ok(node!(
                             self.line,
-                            AstKind::Assign {
-                                name: receiver,
-                                op,
-                                expr: Box::new(expr),
-                                var_type: TypesCheck::Number,
+                            if let Some(index) = index {
+                                AstKind::ArraySet {
+                                    name: receiver,
+                                    index: Box::new(index),
+                                    expr: Box::new(expr),
+                                }
+                            } else {
+                                AstKind::Assign {
+                                    name: receiver,
+                                    op,
+                                    expr: Box::new(expr),
+                                    var_type: TypesCheck::Number,
+                                }
                             }
                         ))
                     }

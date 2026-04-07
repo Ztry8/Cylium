@@ -264,6 +264,16 @@ fn dispatch(
 
                     return Ok(None);
                 }
+                "len" => {
+                    let len = int(match stack.pop() {
+                        Some(Types::Array(array)) => array.len() as i64,
+                        _ => unreachable!(),
+                    });
+
+                    stack.push(len);
+
+                    return Ok(None);
+                }
                 _ => {}
             }
 
@@ -321,6 +331,61 @@ fn dispatch(
                     .0
                     .clone(),
             );
+        }
+
+        Instruction::ArrayNew(n) => {
+            let mut elems = Vec::with_capacity(*n);
+            for _ in 0..*n {
+                match stack.pop() {
+                    Some(Types::Scalar(s)) => elems.push(s),
+                    _ => return Err(errors::A15.to_owned()),
+                }
+            }
+            stack.push(Types::Array(elems));
+        }
+
+        Instruction::ArrayFill => {
+            let fill = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
+            let n = pop_int(stack) as usize;
+            let scalar = match fill {
+                Types::Scalar(s) => s,
+                _ => return Err(errors::A15.to_owned()),
+            };
+            stack.push(Types::Array(vec![scalar; n]));
+        }
+
+        Instruction::ArrayGet => {
+            let idx = pop_int(stack) as usize;
+            match stack.pop() {
+                Some(Types::Array(elems)) => {
+                    let s = elems.get(idx).ok_or_else(|| errors::A19.to_owned())?;
+                    stack.push(Types::Scalar(*s));
+                }
+                _ => return Err(errors::A15.to_owned()),
+            }
+        }
+
+        Instruction::ArraySet => {
+            let val = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
+            let idx = pop_int(stack);
+            let arr = stack.pop().ok_or_else(|| errors::A15.to_owned())?;
+
+            let mut elems = match arr {
+                Types::Array(e) => e,
+                _ => return Err(errors::A15.to_owned()),
+            };
+
+            if idx >= elems.len() as i64 || idx < 0 {
+                return Err(errors::A19.to_owned());
+            }
+
+            let new_scalar = match val {
+                Types::Scalar(s) => s,
+                _ => return Err(errors::A15.to_owned()),
+            };
+
+            elems[idx as usize] = new_scalar;
+            stack.push(Types::Array(elems));
         }
 
         Instruction::PushInt(v) => stack.push(int(*v)),

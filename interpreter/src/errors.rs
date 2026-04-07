@@ -17,7 +17,7 @@ pub const A16: &str = "A16: Invalid type for arithmetic operation.";
 // pub const A17: &str = "A17: Invalid vector index.";
 // pub const A18: &str = "A18: This operator can only be used with strings.";
 
-pub const A19: &str = "A19: Cannot convert value to vector.";
+pub const A19: &str = "A19: Index out of bounds.";
 pub const A20: &str = "A20: Statements are only allowed inside functions.";
 
 pub const A21: &str = "A21: Unclosed string.";
@@ -52,6 +52,8 @@ pub const A45: &str = "A45: Cannot root a negative number.";
 
 pub const A46: &str = "A46: Non-void function must always return a value.";
 pub const A47: &str = "A47: Function returns a void.";
+
+pub const A48: &str = "A48: Array cannot be empty.";
 
 //
 

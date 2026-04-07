@@ -4,12 +4,14 @@ pub enum TypesCheck {
     Boolean,
     Number,
     Float,
+    Array(Box<TypesCheck>),
 }
 
 #[derive(Debug, Clone)]
 pub enum Types {
     Scalar(Scalar),
     String(String),
+    Array(Vec<Scalar>),
     Void,
 }
 
@@ -27,4 +29,5 @@ pub enum ReturnType {
     Boolean,
     Number,
     Float,
+    Array(Box<ReturnType>),
 }

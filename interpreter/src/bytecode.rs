@@ -117,6 +117,11 @@ pub enum Instruction {
     Jump(usize),
     JumpIfFalse(usize),
     Pop,
+
+    ArrayNew(usize),
+    ArrayFill,
+    ArrayGet,
+    ArraySet,
 }
 
 #[inline(always)]
@@ -140,6 +145,7 @@ pub fn compile(handler: &FileHandler, ast: Vec<AstNode>) -> (HashMap<String, Fun
     funcs_rt.insert("shell".to_owned(), ReturnType::Number);
     funcs_rt.insert("unix_time".to_owned(), ReturnType::Number);
     funcs_rt.insert("sleep".to_owned(), ReturnType::Void);
+    funcs_rt.insert("len".to_owned(), ReturnType::Number);
 
     for node in &ast {
         if let AstKind::Func {
@@ -230,6 +236,14 @@ fn main_compile(
             for inst in var_compile(name, *value, is_const)? {
                 push_node(out, inst, line);
             }
+        }
+        AstKind::ArraySet { name, index, expr } => {
+            push_node(out, Instruction::Load(name.clone()), line);
+            expr_compile(out, *index, line)?;
+            expr_compile(out, *expr, line)?;
+
+            push_node(out, Instruction::ArraySet, line);
+            push_node(out, Instruction::StoreLocal(name), line);
         }
         AstKind::Return(None) => {
             push_node(out, Instruction::Return, line);
@@ -536,6 +550,23 @@ fn expr_compile(out: &mut Vec<Node>, value: AstKind, line: usize) -> Result<(), 
             expr_compile(out, *left, line)?;
             push_node(out, binary_op_inst(op, &left_type, &right_type), line);
         }
+        AstKind::ArrayLiteral { values } => {
+            let len = values.len();
+            for v in values.into_iter().rev() {
+                expr_compile(out, v, line)?;
+            }
+            push_node(out, Instruction::ArrayNew(len), line);
+        }
+        AstKind::ArrayFill { size, value } => {
+            expr_compile(out, *size, line)?;
+            expr_compile(out, *value, line)?;
+            push_node(out, Instruction::ArrayFill, line);
+        }
+        AstKind::ArrayGet { name, index } => {
+            push_node(out, Instruction::Load(name), line);
+            expr_compile(out, *index, line)?;
+            push_node(out, Instruction::ArrayGet, line);
+        }
         AstKind::Ident(name) => push_node(out, Instruction::Load(name), line),
         AstKind::Number(v) => push_node(out, Instruction::PushInt(v), line),
         AstKind::Float(v) => push_node(out, Instruction::PushFloat(v), line),
@@ -553,25 +584,25 @@ fn cast_inst(op: &Cast, src: &TypesCheck) -> Instruction {
             TypesCheck::Number => Instruction::IntToStr,
             TypesCheck::Float => Instruction::FloatToStr,
             TypesCheck::Boolean => Instruction::BoolToStr,
-            TypesCheck::String => unreachable!(),
+            _ => unreachable!(),
         },
         Cast::Number => match src {
             TypesCheck::Float => Instruction::FloatToInt,
             TypesCheck::Boolean => Instruction::BoolToInt,
             TypesCheck::String => Instruction::StrToInt,
-            TypesCheck::Number => unreachable!(),
+            _ => unreachable!(),
         },
         Cast::Float => match src {
             TypesCheck::Number => Instruction::IntToFloat,
             TypesCheck::Boolean => Instruction::BoolToFloat,
             TypesCheck::String => Instruction::StrToFloat,
-            TypesCheck::Float => unreachable!(),
+            _ => unreachable!(),
         },
         Cast::Boolean => match src {
             TypesCheck::Number => Instruction::IntToBool,
             TypesCheck::Float => Instruction::FloatToBool,
             TypesCheck::String => Instruction::StrToBool,
-            TypesCheck::Boolean => unreachable!(),
+            _ => unreachable!(),
         },
     }
 }
@@ -615,12 +646,14 @@ fn binary_op_inst(op: Token, lt: &TypesCheck, rt: &TypesCheck) -> Instruction {
             TypesCheck::Float => Instruction::EqFloat,
             TypesCheck::String => Instruction::EqStr,
             TypesCheck::Boolean => Instruction::EqBool,
+            _ => unreachable!(),
         },
         Token::NotEqual => match lt {
             TypesCheck::Number => Instruction::NeInt,
             TypesCheck::Float => Instruction::NeFloat,
             TypesCheck::String => Instruction::NeStr,
             TypesCheck::Boolean => Instruction::NeBool,
+            _ => unreachable!(),
         },
         Token::Greater => match lt {
             TypesCheck::Float => Instruction::GtFloat,

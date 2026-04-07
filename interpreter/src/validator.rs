@@ -130,6 +130,13 @@ fn main_check(
                 ReturnType::Float => TypesCheck::Float,
                 ReturnType::String => TypesCheck::String,
                 ReturnType::Boolean => TypesCheck::Boolean,
+                ReturnType::Array(type_) => TypesCheck::Array(Box::new(match **type_ {
+                    ReturnType::String => TypesCheck::String,
+                    ReturnType::Boolean => TypesCheck::Boolean,
+                    ReturnType::Number => TypesCheck::Number,
+                    ReturnType::Float => TypesCheck::Float,
+                    _ => unreachable!(),
+                })),
                 ReturnType::Void => return Err(errors::A43.to_owned()),
             };
 
@@ -184,6 +191,18 @@ fn main_check(
 
                     let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
                     if t != TypesCheck::Number {
+                        return Err(errors::A42.to_owned());
+                    }
+
+                    return Ok(());
+                }
+                "len" => {
+                    if args.len() != 1 {
+                        return Err(errors::A27.to_owned());
+                    }
+
+                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    if !matches!(t, TypesCheck::Array(_)) {
                         return Err(errors::A42.to_owned());
                     }
 
@@ -309,6 +328,32 @@ fn main_check(
                 return Err(errors::A03.to_owned());
             }
         }
+        AstKind::ArraySet { name, index, expr } => {
+            if let Some((type_, is_const)) = variables.get(name) {
+                if *is_const {
+                    return Err(errors::A07.to_owned());
+                }
+
+                let elem_type = match type_ {
+                    TypesCheck::Array(inner) => *inner.clone(),
+                    _ => return Err(errors::A43.to_owned()),
+                };
+
+                let idx_type = expr_annotate(funcs, variables, consts, index)?;
+
+                if idx_type != TypesCheck::Number {
+                    return Err(errors::A16.to_owned());
+                }
+
+                let val_type = expr_annotate(funcs, variables, consts, expr)?;
+
+                if val_type != elem_type {
+                    return Err(errors::A43.to_owned());
+                }
+            } else {
+                return Err(errors::A03.to_owned());
+            }
+        }
         AstKind::Condition { expr, yes, no } => {
             if expr_annotate(funcs, variables, consts, expr)? == TypesCheck::Boolean {
                 for node in yes.iter_mut() {
@@ -410,6 +455,21 @@ fn expr_annotate(
             expr_check(funcs, variables, consts, node)
         }
         AstKind::Ident(_) => expr_check(funcs, variables, consts, node),
+        AstKind::ArrayLiteral { values } => {
+            for v in values.iter_mut() {
+                expr_annotate(funcs, variables, consts, v)?;
+            }
+            expr_check(funcs, variables, consts, node)
+        }
+        AstKind::ArrayFill { size, value } => {
+            expr_annotate(funcs, variables, consts, size)?;
+            expr_annotate(funcs, variables, consts, value)?;
+            expr_check(funcs, variables, consts, node)
+        }
+        AstKind::ArrayGet { index, .. } => {
+            expr_annotate(funcs, variables, consts, index)?;
+            expr_check(funcs, variables, consts, node)
+        }
         AstKind::BinaryOp {
             left,
             right,
@@ -447,6 +507,49 @@ fn expr_check(
                 Err(errors::A03.to_owned())
             }
         }
+        AstKind::ArrayLiteral { values } => {
+            if values.is_empty() {
+                return Err(errors::A48.to_owned());
+            }
+
+            let first = expr_check(funcs, variables, consts, &values[0])?;
+            for v in &values[1..] {
+                if expr_check(funcs, variables, consts, v)? != first {
+                    return Err(errors::A43.to_owned());
+                }
+            }
+
+            Ok(TypesCheck::Array(Box::new(first)))
+        }
+        AstKind::ArrayFill { size, value } => {
+            let size_type = expr_check(funcs, variables, consts, size)?;
+            if size_type != TypesCheck::Number {
+                return Err(errors::A16.to_owned());
+            }
+
+            let elem = expr_check(funcs, variables, consts, value)?;
+
+            Ok(TypesCheck::Array(Box::new(elem)))
+        }
+        AstKind::ArrayGet { name, index } => {
+            let idx_type = expr_check(funcs, variables, consts, index)?;
+            if idx_type != TypesCheck::Number {
+                return Err(errors::A16.to_owned());
+            }
+
+            let arr_type = if let Some((t, _)) = variables.get(name) {
+                t.clone()
+            } else if let Some(t) = consts.get(name) {
+                t.clone()
+            } else {
+                return Err(errors::A03.to_owned());
+            };
+
+            match arr_type {
+                TypesCheck::Array(inner) => Ok(*inner),
+                _ => Err(errors::A43.to_owned()),
+            }
+        }
         AstKind::FuncCall { name, args } => {
             let argc = args.len();
 
@@ -475,6 +578,15 @@ fn expr_check(
                         _ => Err(errors::A27.to_owned()),
                     };
                 }
+                "len" => {
+                    return match argc {
+                        1 => match expr_check(funcs, variables, consts, &args[0])? {
+                            TypesCheck::Array(_) => Ok(TypesCheck::Number),
+                            _ => Err(errors::A42.to_owned()),
+                        },
+                        _ => Err(errors::A27.to_owned()),
+                    };
+                }
                 "unix_time" => {
                     return match argc {
                         0 => Ok(TypesCheck::Number),
@@ -491,6 +603,13 @@ fn expr_check(
                     ReturnType::Float => Ok(TypesCheck::Float),
                     ReturnType::String => Ok(TypesCheck::String),
                     ReturnType::Boolean => Ok(TypesCheck::Boolean),
+                    ReturnType::Array(type_) => Ok(TypesCheck::Array(Box::new(match **type_ {
+                        ReturnType::String => TypesCheck::String,
+                        ReturnType::Boolean => TypesCheck::Boolean,
+                        ReturnType::Number => TypesCheck::Number,
+                        ReturnType::Float => TypesCheck::Float,
+                        _ => unreachable!(),
+                    }))),
                     ReturnType::Void => Err(errors::A47.to_owned()),
                 }
             } else {
