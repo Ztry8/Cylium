@@ -104,7 +104,9 @@ pub enum AstKind {
     ArraySet {
         name: String,
         index: Box<AstKind>,
+        op: Token,
         expr: Box<AstKind>,
+        elem_type: TypesCheck,
     },
     ArrayGet {
         name: String,
@@ -803,10 +805,6 @@ impl Parser {
                             .cloned()
                             .ok_or_else(|| errors::A15.to_owned())?;
 
-                        if index.is_some() && op != Token::Assign {
-                            return Err(errors::A15.to_owned());
-                        }
-
                         self.pos += 1;
                         let expr = self.parse_value()?;
                         Ok(node!(
@@ -815,7 +813,9 @@ impl Parser {
                                 AstKind::ArraySet {
                                     name: receiver,
                                     index: Box::new(index),
+                                    op,
                                     expr: Box::new(expr),
+                                    elem_type: TypesCheck::Number,
                                 }
                             } else {
                                 AstKind::Assign {

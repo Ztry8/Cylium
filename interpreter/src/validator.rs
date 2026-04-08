@@ -328,27 +328,72 @@ fn main_check(
                 return Err(errors::A03.to_owned());
             }
         }
-        AstKind::ArraySet { name, index, expr } => {
+        AstKind::ArraySet {
+            name,
+            index,
+            expr,
+            op,
+            elem_type,
+        } => {
             if let Some((type_, is_const)) = variables.get(name) {
                 if *is_const {
                     return Err(errors::A07.to_owned());
                 }
 
-                let elem_type = match type_ {
+                let real_elem = match type_ {
                     TypesCheck::Array(inner) => *inner.clone(),
                     _ => return Err(errors::A43.to_owned()),
                 };
 
-                let idx_type = expr_annotate(funcs, variables, consts, index)?;
+                *elem_type = real_elem.clone();
 
+                let idx_type = expr_annotate(funcs, variables, consts, index)?;
                 if idx_type != TypesCheck::Number {
                     return Err(errors::A16.to_owned());
                 }
 
                 let val_type = expr_annotate(funcs, variables, consts, expr)?;
 
-                if val_type != elem_type {
-                    return Err(errors::A43.to_owned());
+                match op {
+                    Token::Assign => {
+                        if val_type != real_elem {
+                            return Err(errors::A43.to_owned());
+                        }
+                    }
+                    Token::PlusAssign => match (&real_elem, &val_type) {
+                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Float, TypesCheck::Float) => {}
+                        (TypesCheck::String, TypesCheck::String) => {}
+                        _ => return Err(errors::A16.to_owned()),
+                    },
+                    Token::MinusAssign => match (&real_elem, &val_type) {
+                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Float, TypesCheck::Float) => {}
+                        _ => return Err(errors::A16.to_owned()),
+                    },
+                    Token::MultiplyAssign => match (&real_elem, &val_type) {
+                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Float, TypesCheck::Float) => {}
+                        _ => return Err(errors::A16.to_owned()),
+                    },
+                    Token::DivideAssign => match (&real_elem, &val_type) {
+                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Float, TypesCheck::Float) => {}
+                        _ => return Err(errors::A16.to_owned()),
+                    },
+                    Token::ModAssign => match (&real_elem, &val_type) {
+                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        _ => return Err(errors::A16.to_owned()),
+                    },
+                    Token::BitAndAssign
+                    | Token::BitOrAssign
+                    | Token::BitXorAssign
+                    | Token::BitRightAssign
+                    | Token::BitLeftAssign => match (&real_elem, &val_type) {
+                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        _ => return Err(errors::A16.to_owned()),
+                    },
+                    _ => return Err(errors::A15.to_owned()),
                 }
             } else {
                 return Err(errors::A03.to_owned());

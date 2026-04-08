@@ -237,10 +237,55 @@ fn main_compile(
                 push_node(out, inst, line);
             }
         }
-        AstKind::ArraySet { name, index, expr } => {
-            push_node(out, Instruction::Load(name.clone()), line);
-            expr_compile(out, *index, line)?;
-            expr_compile(out, *expr, line)?;
+        AstKind::ArraySet {
+            name,
+            index,
+            expr,
+            op,
+            elem_type,
+        } => {
+            if op == Token::Assign {
+                push_node(out, Instruction::Load(name.clone()), line);
+                expr_compile(out, *index, line)?;
+                expr_compile(out, *expr, line)?;
+            } else {
+                push_node(out, Instruction::Load(name.clone()), line);
+                expr_compile(out, *index.clone(), line)?;
+                push_node(out, Instruction::ArrayGet, line);
+
+                expr_compile(out, *expr, line)?;
+
+                let inst = match op {
+                    Token::PlusAssign => match elem_type {
+                        TypesCheck::Float => Instruction::AddFloat,
+                        TypesCheck::String => Instruction::ConcatStr,
+                        _ => Instruction::AddInt,
+                    },
+                    Token::MinusAssign => match elem_type {
+                        TypesCheck::Float => Instruction::SubFloat,
+                        _ => Instruction::SubInt,
+                    },
+                    Token::MultiplyAssign => match elem_type {
+                        TypesCheck::Float => Instruction::MulFloat,
+                        _ => Instruction::MulInt,
+                    },
+                    Token::DivideAssign => match elem_type {
+                        TypesCheck::Float => Instruction::DivFloat,
+                        _ => Instruction::DivInt,
+                    },
+                    Token::ModAssign => Instruction::ModInt,
+                    Token::BitAndAssign => Instruction::AndInt,
+                    Token::BitOrAssign => Instruction::OrInt,
+                    Token::BitXorAssign => Instruction::XorInt,
+                    Token::BitRightAssign => Instruction::RightInt,
+                    Token::BitLeftAssign => Instruction::LeftInt,
+                    _ => unreachable!(),
+                };
+                push_node(out, inst, line);
+
+                push_node(out, Instruction::Load(name.clone()), line);
+                expr_compile(out, *index.clone(), line)?;
+            }
 
             push_node(out, Instruction::ArraySet, line);
             push_node(out, Instruction::StoreLocal(name), line);
