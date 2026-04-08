@@ -12,7 +12,7 @@
   * [x] Implement `for` loop
 
 * [x] Replace procedures with functions 
-* [ ] Add arrays 
+* [x] Add arrays 
 * [ ] Add structures
 * [ ] Add unions
 * [ ] Add references to variables
