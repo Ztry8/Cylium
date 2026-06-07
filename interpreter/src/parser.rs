@@ -471,11 +471,10 @@ impl Parser {
                 if self.current_token() != Some(&Token::CloseBracket) {
                     return Err(errors::A15.to_owned());
                 }
-
+                self.pos += 1;
                 type_ = TypesCheck::Array(Box::new(type_));
             }
 
-            self.pos += 1;
             args.push((arg, type_));
 
             if self.current_token() == Some(&Token::Comma) {
@@ -504,12 +503,11 @@ impl Parser {
         self.pos += 1;
         if self.current_token() == Some(&Token::OpenBracket) {
             self.pos += 1;
-
-            if self.current_token() == Some(&Token::CloseBracket) {
-                return_type = ReturnType::Array(Box::new(return_type));
-            } else {
+            if self.current_token() != Some(&Token::CloseBracket) {
                 return Err(errors::A15.to_owned());
             }
+            self.pos += 1;
+            return_type = ReturnType::Array(Box::new(return_type));
         }
 
         let mut body = Vec::new();
