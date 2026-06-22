@@ -22,8 +22,8 @@ impl std::fmt::Display for BuildError {
 pub fn build(c_source: &str, output_path: &Path) -> Result<PathBuf, BuildError> {
     let work_dir = make_temp_dir()?;
 
-    let header_path = work_dir.join("cyl_runtime.h");
-    let runtime_c_path = work_dir.join("cyl_runtime.c");
+    let header_path = work_dir.join("runtime.h");
+    let runtime_c_path = work_dir.join("runtime.c");
     let main_c_path = work_dir.join("cyl_main.c");
 
     fs::write(&header_path, RUNTIME_HEADER)
@@ -36,6 +36,13 @@ pub fn build(c_source: &str, output_path: &Path) -> Result<PathBuf, BuildError> 
     let compiler = locate_compiler()?;
 
     let final_output = platform_executable_path(output_path);
+    let final_output = if final_output.is_absolute() {
+        final_output
+    } else {
+        std::env::current_dir()
+            .map_err(|e| BuildError(format!("could not resolve current directory: {e}")))?
+            .join(final_output)
+    };
     if let Some(parent) = final_output.parent() {
         fs::create_dir_all(parent).map_err(|e| {
             BuildError(format!(
