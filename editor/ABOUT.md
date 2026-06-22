@@ -22,7 +22,8 @@ It is built with Python and Tkinter, and works on Windows, Linux, and macOS.
 2. Ensure you have Tkinter installed (usually included with Python).
 3. Run the editor:
    ```
-   git clone https://github.com/yourusername/cylium-editor.git
+   git clone https://github.com/Ztry8/Cylium.git
+   cd Cylium/editor
    python3 main.py
    ```
 
