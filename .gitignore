@@ -1,11 +1,11 @@
-interpreter/debug
-interpreter/target
+compiler/debug
+compiler/target
 
-interpreter/**/*.rs.bk
-interpreter/*.pdb
+compiler/**/*.rs.bk
+compiler/*.pdb
 
-interpreter/**/mutants.out*/
-interpreter/Cargo.lock
+compiler/**/mutants.out*/
+compiler/Cargo.lock
 
 .DS_Store
 
@@ -14,4 +14,4 @@ editor/cylium
 
 benchmarks/build
 
-interpreter/test.cyl
+compiler/test.cyl
