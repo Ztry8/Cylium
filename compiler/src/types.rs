@@ -2,7 +2,7 @@
 pub enum TypesCheck {
     String,
     Boolean,
-    Number,
+    Int,
     Float,
     Array(Box<TypesCheck>),
 }
@@ -12,7 +12,7 @@ pub enum ReturnType {
     Void,
     String,
     Boolean,
-    Number,
+    Int,
     Float,
     Array(Box<ReturnType>),
 }

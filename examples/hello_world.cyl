@@ -1,6 +1,6 @@
 # Hello World in Cylium
 
-func main() -> number
+func main() -> int
     echo("Hello, World!")
     return 0
 end

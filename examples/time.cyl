@@ -1,4 +1,4 @@
-func main() -> number
+func main() -> int
     echo("January 1, 1970 was " + unix_time() + " seconds ago!")
 
     for seconds from 1 to 5

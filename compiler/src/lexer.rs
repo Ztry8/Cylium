@@ -7,7 +7,7 @@ use crate::{errors, file_handler::FileHandler};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Ident(String),
-    NumberValue(i64),
+    IntValue(i64),
     FloatValue(f64),
     StringValue(String),
     BooleanValue(bool),
@@ -18,7 +18,7 @@ pub enum Token {
     From,   // from
     To,     // to
     Step,   // step
-    Number, // number
+    Int,    // int
     Float,  // float
     String, // string
     Void,   // void
@@ -268,13 +268,13 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                     i -= 1;
 
                     if let Ok(number) = num.parse::<i64>() {
-                        tokens.push(Token::NumberValue(number));
+                        tokens.push(Token::IntValue(number));
                     } else if let Ok(float) = num.parse::<f64>() {
                         tokens.push(Token::FloatValue(float));
                     } else if let Some(binary_str) = num.strip_prefix("0b")
                         && let Some(binary_num) = i64::from_str_radix(binary_str, 2).ok()
                     {
-                        tokens.push(Token::NumberValue(binary_num));
+                        tokens.push(Token::IntValue(binary_num));
                     } else {
                         return Err(errors::A34.to_owned());
                     }
@@ -290,7 +290,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                         "true" => tokens.push(Token::BooleanValue(true)),
                         "false" => tokens.push(Token::BooleanValue(false)),
                         "as" => tokens.push(Token::As),
-                        "number" => tokens.push(Token::Number),
+                        "int" => tokens.push(Token::Int),
                         "float" => tokens.push(Token::Float),
                         "string" => tokens.push(Token::String),
                         "bool" => tokens.push(Token::Bool),

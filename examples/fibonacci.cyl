@@ -1,6 +1,6 @@
 # Implementation of the Fibonacci sequence in Cylium
 
-func fib(n: number) -> number
+func fib(n: int) -> int
     if n <= 1
         return n
     end
@@ -8,8 +8,8 @@ func fib(n: number) -> number
     return fib(n - 1) + fib(n - 2)
 end
 
-func main() -> number
-    number n = input() as number
+func main() -> int
+    int n = input() as int
 
     for i from 0 to n
         echo(fib(i))

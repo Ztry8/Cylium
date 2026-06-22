@@ -1,6 +1,6 @@
 # Implementation of the Pythagorean theorem in Cylium
 
-func main() -> number
+func main() -> int
     float x = input() as float
     float y = input() as float
 

@@ -190,12 +190,12 @@ fn c_const_name(name: &str) -> String {
 
 fn c_type(t: &TypesCheck) -> &'static str {
     match t {
-        TypesCheck::Number => "cyl_int",
+        TypesCheck::Int => "cyl_int",
         TypesCheck::Float => "double",
         TypesCheck::Boolean => "cyl_bool",
         TypesCheck::String => "CylString",
         TypesCheck::Array(inner) => match inner.as_ref() {
-            TypesCheck::Number => "CylArrayInt",
+            TypesCheck::Int => "CylArrayInt",
             TypesCheck::Float => "CylArrayFloat",
             TypesCheck::Boolean => "CylArrayBool",
             other => panic!("unsupported array element type in codegen: {other:?}"),
@@ -206,12 +206,12 @@ fn c_type(t: &TypesCheck) -> &'static str {
 fn c_return_type(t: &ReturnType) -> &'static str {
     match t {
         ReturnType::Void => "void",
-        ReturnType::Number => "cyl_int",
+        ReturnType::Int => "cyl_int",
         ReturnType::Float => "double",
         ReturnType::Boolean => "cyl_bool",
         ReturnType::String => "CylString",
         ReturnType::Array(inner) => match inner.as_ref() {
-            ReturnType::Number => "CylArrayInt",
+            ReturnType::Int => "CylArrayInt",
             ReturnType::Float => "CylArrayFloat",
             ReturnType::Boolean => "CylArrayBool",
             other => panic!("unsupported array element type in codegen: {other:?}"),
@@ -222,7 +222,7 @@ fn c_return_type(t: &ReturnType) -> &'static str {
 fn return_type_to_check(t: &ReturnType) -> TypesCheck {
     match t {
         ReturnType::Void => unreachable!("Void has no expression-position type"),
-        ReturnType::Number => TypesCheck::Number,
+        ReturnType::Int => TypesCheck::Int,
         ReturnType::Float => TypesCheck::Float,
         ReturnType::Boolean => TypesCheck::Boolean,
         ReturnType::String => TypesCheck::String,
@@ -236,7 +236,7 @@ fn is_heap_type(t: &TypesCheck) -> bool {
 
 fn array_elem_suffix(elem: &TypesCheck) -> &'static str {
     match elem {
-        TypesCheck::Number => "int",
+        TypesCheck::Int => "int",
         TypesCheck::Float => "float",
         TypesCheck::Boolean => "bool",
         other => panic!("unsupported array element type in codegen: {other:?}"),
@@ -252,7 +252,7 @@ fn heap_free_fn(ty: &TypesCheck) -> &'static str {
             "bool" => "cyl_array_bool_free",
             _ => unreachable!(),
         },
-        TypesCheck::Number | TypesCheck::Float | TypesCheck::Boolean => {
+        TypesCheck::Int | TypesCheck::Float | TypesCheck::Boolean => {
             unreachable!("heap_free_fn called on a non-heap type")
         }
     }
@@ -305,7 +305,7 @@ fn emit_top_level_const(
     value: &AstKind,
 ) -> Result<(), String> {
     match (type_, value) {
-        (TypesCheck::Number, AstKind::Number(v)) => {
+        (TypesCheck::Int, AstKind::Int(v)) => {
             let _ = writeln!(out, "static const cyl_int {} = {v}L;", c_const_name(name));
         }
         (TypesCheck::Float, AstKind::Float(v)) => {
@@ -529,7 +529,7 @@ fn compile_stmt(
         AstKind::Echo(expr) => {
             let (ty, code) = compile_expr(fctx, expr)?;
             let echo_fn = match ty {
-                TypesCheck::Number => "cyl_echo_int",
+                TypesCheck::Int => "cyl_echo_int",
                 TypesCheck::Float => "cyl_echo_float",
                 TypesCheck::Boolean => "cyl_echo_bool",
                 TypesCheck::String => "cyl_echo_string",
@@ -706,7 +706,7 @@ fn compile_assign(
     }
 
     match var_type {
-        TypesCheck::Number | TypesCheck::Float => {
+        TypesCheck::Int | TypesCheck::Float => {
             let c_op = simple_compound_op(op).ok_or_else(|| {
                 format!("internal codegen error: unsupported compound op {op:?} for numeric type")
             })?;
@@ -782,7 +782,7 @@ fn compile_array_set(
                 ));
             }
         },
-        TypesCheck::Number => {
+        TypesCheck::Int => {
             let c_op = simple_compound_op(op).ok_or_else(|| {
                 format!("internal codegen error: unsupported compound array op {op:?}")
             })?;
@@ -812,19 +812,19 @@ fn compile_for(
     step: &Option<AstKind>,
     body: &[AstNode],
 ) -> Result<(), String> {
-    fctx.declare(var_name, TypesCheck::Number);
+    fctx.declare(var_name, TypesCheck::Int);
     let (_, start_code) = compile_expr(fctx, start)?;
     let _ = writeln!(out, "{pad}{} = {start_code};", c_name(var_name));
 
     let end_var = hidden_for_var("fe", var_name);
-    fctx.declare(&end_var, TypesCheck::Number);
+    fctx.declare(&end_var, TypesCheck::Int);
     let (_, end_code) = compile_expr(fctx, end)?;
     let _ = writeln!(out, "{pad}{} = {end_code};", c_name(&end_var));
 
     let step_var = match step {
         Some(step_expr) => {
             let sv = hidden_for_var("fs", var_name);
-            fctx.declare(&sv, TypesCheck::Number);
+            fctx.declare(&sv, TypesCheck::Int);
             let (_, step_code) = compile_expr(fctx, step_expr)?;
             let _ = writeln!(out, "{pad}{} = {step_code};", c_name(&sv));
             Some(sv)
@@ -874,7 +874,7 @@ fn compile_expr(fctx: &mut FuncCtx, node: &AstKind) -> Result<(TypesCheck, Strin
             }
         }
 
-        AstKind::Number(v) => Ok((TypesCheck::Number, format!("{v}L"))),
+        AstKind::Int(v) => Ok((TypesCheck::Int, format!("{v}L"))),
         AstKind::Float(v) => Ok((TypesCheck::Float, format_c_float(*v))),
         AstKind::Boolean(v) => Ok((
             TypesCheck::Boolean,
@@ -951,7 +951,7 @@ fn compile_cast(
 ) -> Result<(TypesCheck, String), String> {
     let (_, code) = compile_expr(fctx, expr)?;
     let (dst, rendered) = match (op, src_type) {
-        (Cast::String, TypesCheck::Number) => {
+        (Cast::String, TypesCheck::Int) => {
             (TypesCheck::String, format!("cyl_int_to_string({code})"))
         }
         (Cast::String, TypesCheck::Float) => {
@@ -961,19 +961,19 @@ fn compile_cast(
             (TypesCheck::String, format!("cyl_bool_to_string({code})"))
         }
 
-        (Cast::Number, TypesCheck::Float) => (TypesCheck::Number, format!("((cyl_int)({code}))")),
-        (Cast::Number, TypesCheck::Boolean) => (TypesCheck::Number, format!("((cyl_int)({code}))")),
-        (Cast::Number, TypesCheck::String) => {
-            (TypesCheck::Number, format!("cyl_string_to_int({code})"))
+        (Cast::Int, TypesCheck::Float) => (TypesCheck::Int, format!("((cyl_int)({code}))")),
+        (Cast::Int, TypesCheck::Boolean) => (TypesCheck::Int, format!("((cyl_int)({code}))")),
+        (Cast::Int, TypesCheck::String) => {
+            (TypesCheck::Int, format!("cyl_string_to_int({code})"))
         }
 
-        (Cast::Float, TypesCheck::Number) => (TypesCheck::Float, format!("((double)({code}))")),
+        (Cast::Float, TypesCheck::Int) => (TypesCheck::Float, format!("((double)({code}))")),
         (Cast::Float, TypesCheck::Boolean) => (TypesCheck::Float, format!("((double)({code}))")),
         (Cast::Float, TypesCheck::String) => {
             (TypesCheck::Float, format!("cyl_string_to_float({code})"))
         }
 
-        (Cast::Boolean, TypesCheck::Number) => {
+        (Cast::Boolean, TypesCheck::Int) => {
             (TypesCheck::Boolean, format!("((cyl_bool)(({code}) != 0))"))
         }
         (Cast::Boolean, TypesCheck::Float) => (
@@ -1007,10 +1007,10 @@ fn compile_expr_call(
         }
         "shell" => {
             let (_, a) = compile_expr(fctx, &args[0])?;
-            return Ok((TypesCheck::Number, format!("cyl_builtin_shell({a})")));
+            return Ok((TypesCheck::Int, format!("cyl_builtin_shell({a})")));
         }
         "unix_time" => {
-            return Ok((TypesCheck::Number, "cyl_builtin_unix_time()".to_owned()));
+            return Ok((TypesCheck::Int, "cyl_builtin_unix_time()".to_owned()));
         }
         "sleep" => {
             let (_, a) = compile_expr(fctx, &args[0])?;
@@ -1035,7 +1035,7 @@ fn compile_expr_call(
             let suffix = array_elem_suffix(&elem);
             let (_, a) = compile_expr(fctx, &args[0])?;
             return Ok((
-                TypesCheck::Number,
+                TypesCheck::Int,
                 format!("((cyl_int)cyl_array_{suffix}_len({a}))"),
             ));
         }
@@ -1084,7 +1084,7 @@ fn infer_expr_type(fctx: &FuncCtx, node: &AstKind) -> Result<TypesCheck, String>
     match node {
         AstKind::Ident(name) => fctx.lookup(name),
 
-        AstKind::Number(_) => Ok(TypesCheck::Number),
+        AstKind::Int(_) => Ok(TypesCheck::Int),
         AstKind::Float(_) => Ok(TypesCheck::Float),
         AstKind::Boolean(_) => Ok(TypesCheck::Boolean),
         AstKind::String(_) => Ok(TypesCheck::String),
@@ -1098,7 +1098,7 @@ fn infer_expr_type(fctx: &FuncCtx, node: &AstKind) -> Result<TypesCheck, String>
         AstKind::UnaryOp { expr_type, .. } => Ok(expr_type.clone()),
         AstKind::AsOp { op, .. } => Ok(match op {
             Cast::String => TypesCheck::String,
-            Cast::Number => TypesCheck::Number,
+            Cast::Int => TypesCheck::Int,
             Cast::Float => TypesCheck::Float,
             Cast::Boolean => TypesCheck::Boolean,
         }),
@@ -1187,12 +1187,12 @@ fn binary_op_result_type(
         Token::Or | Token::And => TypesCheck::Boolean,
 
         Token::Plus => match (left_type, right_type) {
-            (TypesCheck::Number, TypesCheck::Number) => TypesCheck::Number,
+            (TypesCheck::Int, TypesCheck::Int) => TypesCheck::Int,
             (TypesCheck::Float, TypesCheck::Float) => TypesCheck::Float,
             (TypesCheck::String, TypesCheck::String)
-            | (TypesCheck::String, TypesCheck::Number)
+            | (TypesCheck::String, TypesCheck::Int)
             | (TypesCheck::String, TypesCheck::Float)
-            | (TypesCheck::Number, TypesCheck::String)
+            | (TypesCheck::Int, TypesCheck::String)
             | (TypesCheck::Float, TypesCheck::String) => TypesCheck::String,
             _ => {
                 return Err(format!(
@@ -1202,12 +1202,12 @@ fn binary_op_result_type(
         },
         Token::Minus => match left_type {
             TypesCheck::Float => TypesCheck::Float,
-            _ => TypesCheck::Number,
+            _ => TypesCheck::Int,
         },
         Token::Multiply => match (left_type, right_type) {
-            (TypesCheck::Number, TypesCheck::Number) => TypesCheck::Number,
+            (TypesCheck::Int, TypesCheck::Int) => TypesCheck::Int,
             (TypesCheck::Float, TypesCheck::Float) => TypesCheck::Float,
-            (TypesCheck::String, TypesCheck::Number) | (TypesCheck::Number, TypesCheck::String) => {
+            (TypesCheck::String, TypesCheck::Int) | (TypesCheck::Int, TypesCheck::String) => {
                 TypesCheck::String
             }
             _ => {
@@ -1218,7 +1218,7 @@ fn binary_op_result_type(
         },
         Token::Divide | Token::Mod => match left_type {
             TypesCheck::Float => TypesCheck::Float,
-            _ => TypesCheck::Number,
+            _ => TypesCheck::Int,
         },
 
         Token::Equal
@@ -1229,7 +1229,7 @@ fn binary_op_result_type(
         | Token::LessEqual => TypesCheck::Boolean,
 
         Token::BitAnd | Token::BitOr | Token::BitXor | Token::BitRight | Token::BitLeft => {
-            TypesCheck::Number
+            TypesCheck::Int
         }
 
         _ => {
@@ -1258,12 +1258,12 @@ fn compile_binary_op(
         Token::And => format!("(({l}) && ({r}))"),
 
         Token::Plus => match (left_type, right_type) {
-            (TypesCheck::Number, TypesCheck::Number) => format!("(({l}) + ({r}))"),
+            (TypesCheck::Int, TypesCheck::Int) => format!("(({l}) + ({r}))"),
             (TypesCheck::Float, TypesCheck::Float) => format!("(({l}) + ({r}))"),
             (TypesCheck::String, TypesCheck::String) => format!("cyl_string_concat({l}, {r})"),
-            (TypesCheck::String, TypesCheck::Number) => format!("cyl_string_concat_int({l}, {r})"),
+            (TypesCheck::String, TypesCheck::Int) => format!("cyl_string_concat_int({l}, {r})"),
             (TypesCheck::String, TypesCheck::Float) => format!("cyl_string_concat_float({l}, {r})"),
-            (TypesCheck::Number, TypesCheck::String) => {
+            (TypesCheck::Int, TypesCheck::String) => {
                 format!("cyl_string_concat_int_rev({l}, {r})")
             }
             (TypesCheck::Float, TypesCheck::String) => {
@@ -1273,10 +1273,10 @@ fn compile_binary_op(
         },
         Token::Minus => format!("(({l}) - ({r}))"),
         Token::Multiply => match (left_type, right_type) {
-            (TypesCheck::Number, TypesCheck::Number) => format!("(({l}) * ({r}))"),
+            (TypesCheck::Int, TypesCheck::Int) => format!("(({l}) * ({r}))"),
             (TypesCheck::Float, TypesCheck::Float) => format!("(({l}) * ({r}))"),
-            (TypesCheck::String, TypesCheck::Number) => format!("cyl_string_repeat({l}, {r})"),
-            (TypesCheck::Number, TypesCheck::String) => format!("cyl_string_repeat({r}, {l})"),
+            (TypesCheck::String, TypesCheck::Int) => format!("cyl_string_repeat({l}, {r})"),
+            (TypesCheck::Int, TypesCheck::String) => format!("cyl_string_repeat({r}, {l})"),
             _ => unreachable!("binary_op_result_type already validated '*' operand types"),
         },
         Token::Divide => match left_type {

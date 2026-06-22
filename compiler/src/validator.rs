@@ -45,7 +45,7 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     }
 
     match funcs.get("main") {
-        Some((args, ret)) if args.is_empty() && *ret == ReturnType::Number => {}
+        Some((args, ret)) if args.is_empty() && *ret == ReturnType::Int => {}
         Some(_) => handler.show_error(0, errors::A22),
         None => {}
     }
@@ -126,14 +126,14 @@ fn main_check(
         AstKind::Return(Some(expr)) => {
             let t = expr_annotate(funcs, variables, consts, expr)?;
             let expected = match return_type {
-                ReturnType::Number => TypesCheck::Number,
+                ReturnType::Int => TypesCheck::Int,
                 ReturnType::Float => TypesCheck::Float,
                 ReturnType::String => TypesCheck::String,
                 ReturnType::Boolean => TypesCheck::Boolean,
                 ReturnType::Array(type_) => TypesCheck::Array(Box::new(match **type_ {
                     ReturnType::String => TypesCheck::String,
                     ReturnType::Boolean => TypesCheck::Boolean,
-                    ReturnType::Number => TypesCheck::Number,
+                    ReturnType::Int => TypesCheck::Int,
                     ReturnType::Float => TypesCheck::Float,
                     _ => unreachable!(),
                 })),
@@ -190,7 +190,7 @@ fn main_check(
                     }
 
                     let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
-                    if t != TypesCheck::Number {
+                    if t != TypesCheck::Int {
                         return Err(errors::A42.to_owned());
                     }
 
@@ -273,50 +273,50 @@ fn main_check(
                         }
                         Token::PlusAssign => match (var_type, value) {
                             (TypesCheck::String, TypesCheck::String) => {}
-                            (TypesCheck::String, TypesCheck::Number) => {}
+                            (TypesCheck::String, TypesCheck::Int) => {}
                             (TypesCheck::String, TypesCheck::Float) => {}
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::MinusAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::MultiplyAssign => match (var_type, value) {
-                            (TypesCheck::String, TypesCheck::Number) => {}
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::String, TypesCheck::Int) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::DivideAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             (TypesCheck::Float, TypesCheck::Float) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::ModAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::BitAndAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::BitOrAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::BitXorAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::BitRightAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         Token::BitLeftAssign => match (var_type, value) {
-                            (TypesCheck::Number, TypesCheck::Number) => {}
+                            (TypesCheck::Int, TypesCheck::Int) => {}
                             _ => return Err(errors::A16.to_owned()),
                         },
                         _ => unreachable!(),
@@ -348,7 +348,7 @@ fn main_check(
                 *elem_type = real_elem.clone();
 
                 let idx_type = expr_annotate(funcs, variables, consts, index)?;
-                if idx_type != TypesCheck::Number {
+                if idx_type != TypesCheck::Int {
                     return Err(errors::A16.to_owned());
                 }
 
@@ -361,28 +361,28 @@ fn main_check(
                         }
                     }
                     Token::PlusAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Int, TypesCheck::Int) => {}
                         (TypesCheck::Float, TypesCheck::Float) => {}
                         (TypesCheck::String, TypesCheck::String) => {}
                         _ => return Err(errors::A16.to_owned()),
                     },
                     Token::MinusAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Int, TypesCheck::Int) => {}
                         (TypesCheck::Float, TypesCheck::Float) => {}
                         _ => return Err(errors::A16.to_owned()),
                     },
                     Token::MultiplyAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Int, TypesCheck::Int) => {}
                         (TypesCheck::Float, TypesCheck::Float) => {}
                         _ => return Err(errors::A16.to_owned()),
                     },
                     Token::DivideAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Int, TypesCheck::Int) => {}
                         (TypesCheck::Float, TypesCheck::Float) => {}
                         _ => return Err(errors::A16.to_owned()),
                     },
                     Token::ModAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Int, TypesCheck::Int) => {}
                         _ => return Err(errors::A16.to_owned()),
                     },
                     Token::BitAndAssign
@@ -390,7 +390,7 @@ fn main_check(
                     | Token::BitXorAssign
                     | Token::BitRightAssign
                     | Token::BitLeftAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Number, TypesCheck::Number) => {}
+                        (TypesCheck::Int, TypesCheck::Int) => {}
                         _ => return Err(errors::A16.to_owned()),
                     },
                     _ => return Err(errors::A15.to_owned()),
@@ -438,13 +438,13 @@ fn main_check(
         } => {
             let start_type = expr_annotate(funcs, variables, consts, start)?;
 
-            if !matches!(start_type, TypesCheck::Number) {
+            if !matches!(start_type, TypesCheck::Int) {
                 return Err(errors::A15.to_owned());
             }
 
             if !matches!(
                 expr_annotate(funcs, variables, consts, end)?,
-                TypesCheck::Number
+                TypesCheck::Int
             ) {
                 return Err(errors::A15.to_owned());
             }
@@ -452,7 +452,7 @@ fn main_check(
             if let Some(step) = step.as_mut()
                 && !matches!(
                     expr_annotate(funcs, variables, consts, step)?,
-                    TypesCheck::Number
+                    TypesCheck::Int
                 )
             {
                 return Err(errors::A15.to_owned());
@@ -539,7 +539,7 @@ fn expr_check(
     node: &AstKind,
 ) -> Result<TypesCheck, String> {
     match node {
-        AstKind::Number(_) => Ok(TypesCheck::Number),
+        AstKind::Int(_) => Ok(TypesCheck::Int),
         AstKind::Float(_) => Ok(TypesCheck::Float),
         AstKind::String(_) => Ok(TypesCheck::String),
         AstKind::Boolean(_) => Ok(TypesCheck::Boolean),
@@ -568,7 +568,7 @@ fn expr_check(
         }
         AstKind::ArrayFill { size, value } => {
             let size_type = expr_check(funcs, variables, consts, size)?;
-            if size_type != TypesCheck::Number {
+            if size_type != TypesCheck::Int {
                 return Err(errors::A16.to_owned());
             }
 
@@ -578,7 +578,7 @@ fn expr_check(
         }
         AstKind::ArrayGet { name, index } => {
             let idx_type = expr_check(funcs, variables, consts, index)?;
-            if idx_type != TypesCheck::Number {
+            if idx_type != TypesCheck::Int {
                 return Err(errors::A16.to_owned());
             }
 
@@ -617,7 +617,7 @@ fn expr_check(
                 "shell" => {
                     return match argc {
                         1 => match expr_check(funcs, variables, consts, &args[0])? {
-                            TypesCheck::String => Ok(TypesCheck::Number),
+                            TypesCheck::String => Ok(TypesCheck::Int),
                             _ => Err(errors::A42.to_owned()),
                         },
                         _ => Err(errors::A27.to_owned()),
@@ -626,7 +626,7 @@ fn expr_check(
                 "len" => {
                     return match argc {
                         1 => match expr_check(funcs, variables, consts, &args[0])? {
-                            TypesCheck::Array(_) => Ok(TypesCheck::Number),
+                            TypesCheck::Array(_) => Ok(TypesCheck::Int),
                             _ => Err(errors::A42.to_owned()),
                         },
                         _ => Err(errors::A27.to_owned()),
@@ -634,7 +634,7 @@ fn expr_check(
                 }
                 "unix_time" => {
                     return match argc {
-                        0 => Ok(TypesCheck::Number),
+                        0 => Ok(TypesCheck::Int),
                         _ => Err(errors::A27.to_owned()),
                     };
                 }
@@ -644,14 +644,14 @@ fn expr_check(
 
             if let Some((_, ret)) = funcs.get(name) {
                 match ret {
-                    ReturnType::Number => Ok(TypesCheck::Number),
+                    ReturnType::Int => Ok(TypesCheck::Int),
                     ReturnType::Float => Ok(TypesCheck::Float),
                     ReturnType::String => Ok(TypesCheck::String),
                     ReturnType::Boolean => Ok(TypesCheck::Boolean),
                     ReturnType::Array(type_) => Ok(TypesCheck::Array(Box::new(match **type_ {
                         ReturnType::String => TypesCheck::String,
                         ReturnType::Boolean => TypesCheck::Boolean,
-                        ReturnType::Number => TypesCheck::Number,
+                        ReturnType::Int => TypesCheck::Int,
                         ReturnType::Float => TypesCheck::Float,
                         _ => unreachable!(),
                     }))),
@@ -670,11 +670,11 @@ fn expr_check(
                     _ => Err(errors::A39.to_owned()),
                 },
                 Token::BitNot => match value {
-                    TypesCheck::Number => Ok(TypesCheck::Number),
+                    TypesCheck::Int => Ok(TypesCheck::Int),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::Minus => match value {
-                    TypesCheck::Number => Ok(TypesCheck::Number),
+                    TypesCheck::Int => Ok(TypesCheck::Int),
                     TypesCheck::Float => Ok(TypesCheck::Float),
                     _ => Err(errors::A16.to_owned()),
                 },
@@ -689,9 +689,9 @@ fn expr_check(
                     TypesCheck::String => Err(errors::A40.to_owned()),
                     _ => Ok(TypesCheck::String),
                 },
-                Cast::Number => match value {
-                    TypesCheck::Number => Err(errors::A40.to_owned()),
-                    _ => Ok(TypesCheck::Number),
+                Cast::Int => match value {
+                    TypesCheck::Int => Err(errors::A40.to_owned()),
+                    _ => Ok(TypesCheck::Int),
                 },
                 Cast::Float => match value {
                     TypesCheck::Float => Err(errors::A40.to_owned()),
@@ -721,90 +721,90 @@ fn expr_check(
                 Token::Equal => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Boolean, TypesCheck::Boolean) => Ok(TypesCheck::Boolean),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Boolean),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Boolean),
                     _ => Err(errors::A39.to_owned()),
                 },
                 Token::NotEqual => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Boolean, TypesCheck::Boolean) => Ok(TypesCheck::Boolean),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Boolean),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Boolean),
                     _ => Err(errors::A39.to_owned()),
                 },
                 Token::Greater => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::Boolean),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Boolean),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Boolean),
                     _ => Err(errors::A39.to_owned()),
                 },
                 Token::Less => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::Boolean),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Boolean),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Boolean),
                     _ => Err(errors::A39.to_owned()),
                 },
                 Token::GreaterEqual => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::Boolean),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Boolean),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Boolean),
                     _ => Err(errors::A39.to_owned()),
                 },
                 Token::LessEqual => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::Boolean),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Boolean),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Boolean),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Boolean),
                     _ => Err(errors::A39.to_owned()),
                 },
                 Token::Plus => match (left, right) {
                     (TypesCheck::String, TypesCheck::String) => Ok(TypesCheck::String),
-                    (TypesCheck::String, TypesCheck::Number) => Ok(TypesCheck::String),
+                    (TypesCheck::String, TypesCheck::Int) => Ok(TypesCheck::String),
                     (TypesCheck::String, TypesCheck::Float) => Ok(TypesCheck::String),
-                    (TypesCheck::Number, TypesCheck::String) => Ok(TypesCheck::String),
+                    (TypesCheck::Int, TypesCheck::String) => Ok(TypesCheck::String),
                     (TypesCheck::Float, TypesCheck::String) => Ok(TypesCheck::String),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Float),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::Minus => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Float),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::Multiply => match (left, right) {
-                    (TypesCheck::String, TypesCheck::Number) => Ok(TypesCheck::String),
-                    (TypesCheck::Number, TypesCheck::String) => Ok(TypesCheck::String),
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::String, TypesCheck::Int) => Ok(TypesCheck::String),
+                    (TypesCheck::Int, TypesCheck::String) => Ok(TypesCheck::String),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Float),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::Divide => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     (TypesCheck::Float, TypesCheck::Float) => Ok(TypesCheck::Float),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::Mod => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::BitAnd => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::BitOr => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::BitXor => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::BitRight => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     _ => Err(errors::A16.to_owned()),
                 },
                 Token::BitLeft => match (left, right) {
-                    (TypesCheck::Number, TypesCheck::Number) => Ok(TypesCheck::Number),
+                    (TypesCheck::Int, TypesCheck::Int) => Ok(TypesCheck::Int),
                     _ => Err(errors::A16.to_owned()),
                 },
 

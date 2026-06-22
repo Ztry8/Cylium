@@ -1,8 +1,8 @@
 # Bitwise operators demonstration in Cylium
 
-func main() -> number
-    number a = input() as number
-    number b = input() as number
+func main() -> int
+    int a = input() as int
+    int b = input() as int
     
     echo("AND: " + (a & b))
     echo("OR: " + (a | b))

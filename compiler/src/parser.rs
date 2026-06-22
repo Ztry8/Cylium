@@ -29,7 +29,7 @@ pub struct AstNode {
 pub enum AstKind {
     Ident(String),
 
-    Number(i64),
+    Int(i64),
     Float(f64),
     String(String),
     Boolean(bool),
@@ -123,7 +123,7 @@ pub enum ElseBlock {
 #[derive(Debug, Clone)]
 pub enum Cast {
     String,
-    Number,
+    Int,
     Float,
     Boolean,
 }
@@ -218,7 +218,7 @@ impl Parser {
         }
 
         let type_ = match self.current_token() {
-            Some(Token::Number) => TypesCheck::Number,
+            Some(Token::Int) => TypesCheck::Int,
             Some(Token::Float) => TypesCheck::Float,
             Some(Token::String) => TypesCheck::String,
             Some(Token::Bool) => TypesCheck::Boolean,
@@ -289,7 +289,7 @@ impl Parser {
                 AstKind::UnaryOp {
                     op,
                     expr: Box::new(expr),
-                    expr_type: TypesCheck::Number,
+                    expr_type: TypesCheck::Int,
                 }
             }
             Some(Token::OpenParen) => {
@@ -325,9 +325,9 @@ impl Parser {
                     AstKind::Ident(name)
                 }
             }
-            Some(Token::Number) => {
+            Some(Token::Int) => {
                 self.pos += 1;
-                AstKind::Ident("number".to_owned())
+                AstKind::Ident("int".to_owned())
             }
             Some(Token::Float) => {
                 self.pos += 1;
@@ -341,9 +341,9 @@ impl Parser {
                 self.pos += 1;
                 AstKind::Ident("bool".to_owned())
             }
-            Some(Token::NumberValue(v)) => {
+            Some(Token::IntValue(v)) => {
                 self.pos += 1;
-                AstKind::Number(v)
+                AstKind::Int(v)
             }
             Some(Token::FloatValue(v)) => {
                 self.pos += 1;
@@ -382,7 +382,7 @@ impl Parser {
                     op: if let AstKind::Ident(name) = right {
                         match name.as_str() {
                             "string" => Cast::String,
-                            "number" => Cast::Number,
+                            "int" => Cast::Int,
                             "float" => Cast::Float,
                             "bool" => Cast::Boolean,
                             _ => return Err(errors::A15.to_owned()),
@@ -390,15 +390,15 @@ impl Parser {
                     } else {
                         return Err(errors::A15.to_owned());
                     },
-                    src_type: TypesCheck::Number,
+                    src_type: TypesCheck::Int,
                 };
             } else {
                 left = AstKind::BinaryOp {
                     left: Box::new(left),
                     op: op_tok,
                     right: Box::new(right),
-                    left_type: TypesCheck::Number,
-                    right_type: TypesCheck::Number,
+                    left_type: TypesCheck::Int,
+                    right_type: TypesCheck::Int,
                 };
             }
         }
@@ -458,7 +458,7 @@ impl Parser {
             self.pos += 1;
 
             let mut type_ = match self.current_token() {
-                Some(Token::Number) => TypesCheck::Number,
+                Some(Token::Int) => TypesCheck::Int,
                 Some(Token::Float) => TypesCheck::Float,
                 Some(Token::String) => TypesCheck::String,
                 Some(Token::Bool) => TypesCheck::Boolean,
@@ -493,7 +493,7 @@ impl Parser {
 
         let mut return_type = match self.current_token() {
             Some(Token::Void) => ReturnType::Void,
-            Some(Token::Number) => ReturnType::Number,
+            Some(Token::Int) => ReturnType::Int,
             Some(Token::Float) => ReturnType::Float,
             Some(Token::String) => ReturnType::String,
             Some(Token::Bool) => ReturnType::Boolean,
@@ -615,7 +615,7 @@ impl Parser {
                     return Err(errors::A15.to_owned());
                 }
                 self.pos += 1;
-                let code = if let Some(Token::NumberValue(c)) = self.current_token().cloned() {
+                let code = if let Some(Token::IntValue(c)) = self.current_token().cloned() {
                     self.pos += 1;
                     c as i32
                 } else {
@@ -627,7 +627,7 @@ impl Parser {
                 self.pos += 1;
                 Ok(node!(self.line, AstKind::Exit(code)))
             }
-            Some(Token::Number) | Some(Token::Float) | Some(Token::String) | Some(Token::Bool)
+            Some(Token::Int) | Some(Token::Float) | Some(Token::String) | Some(Token::Bool)
             | Some(Token::Const) => self.parse_var(),
             Some(Token::While) => {
                 self.pos += 1;
@@ -813,14 +813,14 @@ impl Parser {
                                     index: Box::new(index),
                                     op,
                                     expr: Box::new(expr),
-                                    elem_type: TypesCheck::Number,
+                                    elem_type: TypesCheck::Int,
                                 }
                             } else {
                                 AstKind::Assign {
                                     name: receiver,
                                     op,
                                     expr: Box::new(expr),
-                                    var_type: TypesCheck::Number,
+                                    var_type: TypesCheck::Int,
                                 }
                             }
                         ))

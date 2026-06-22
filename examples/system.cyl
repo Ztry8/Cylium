@@ -1,4 +1,4 @@
-func main() -> number 
+func main() -> int 
     if IS_LINUX 
         shell("echo Running on Linux!")
     else if IS_MACOS 

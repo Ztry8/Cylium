@@ -1,6 +1,6 @@
 # Calculate the circumference of a circle using the radius in Cylium.
 
-func main() -> number
+func main() -> int
     float r = input() as float
 
     echo(2.0 * r * PI)
