@@ -963,9 +963,7 @@ fn compile_cast(
 
         (Cast::Int, TypesCheck::Float) => (TypesCheck::Int, format!("((cyl_int)({code}))")),
         (Cast::Int, TypesCheck::Boolean) => (TypesCheck::Int, format!("((cyl_int)({code}))")),
-        (Cast::Int, TypesCheck::String) => {
-            (TypesCheck::Int, format!("cyl_string_to_int({code})"))
-        }
+        (Cast::Int, TypesCheck::String) => (TypesCheck::Int, format!("cyl_string_to_int({code})")),
 
         (Cast::Float, TypesCheck::Int) => (TypesCheck::Float, format!("((double)({code}))")),
         (Cast::Float, TypesCheck::Boolean) => (TypesCheck::Float, format!("((double)({code}))")),

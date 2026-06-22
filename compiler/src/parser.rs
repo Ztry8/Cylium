@@ -445,18 +445,6 @@ impl Parser {
         let mut args = Vec::new();
 
         while self.current_token() != Some(&Token::CloseParen) {
-            let arg = if let Some(Token::Ident(a)) = self.current_token().cloned() {
-                self.pos += 1;
-                a
-            } else {
-                return Err(errors::A15.to_owned());
-            };
-
-            if self.current_token() != Some(&Token::Colon) {
-                return Err(errors::A15.to_owned());
-            }
-            self.pos += 1;
-
             let mut type_ = match self.current_token() {
                 Some(Token::Int) => TypesCheck::Int,
                 Some(Token::Float) => TypesCheck::Float,
@@ -474,6 +462,13 @@ impl Parser {
                 self.pos += 1;
                 type_ = TypesCheck::Array(Box::new(type_));
             }
+
+            let arg = if let Some(Token::Ident(a)) = self.current_token().cloned() {
+                self.pos += 1;
+                a
+            } else {
+                return Err(errors::A15.to_owned());
+            };
 
             args.push((arg, type_));
 

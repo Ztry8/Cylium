@@ -1,6 +1,6 @@
 # Implementation of the Fibonacci sequence in Cylium
 
-func fib(n: int) -> int
+func fib(int n) -> int
     if n <= 1
         return n
     end

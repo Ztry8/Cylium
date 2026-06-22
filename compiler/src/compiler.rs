@@ -109,13 +109,13 @@ fn locate_compiler() -> Result<DetectedCompiler, BuildError> {
         });
     }
 
-    if let Some(bundled) = bundled_tcc_path() {
-        if bundled.is_file() {
-            return Ok(DetectedCompiler {
-                binary: bundled,
-                supports_pedantic_flags: false, // tcc: never pass GCC-style pedantic flags
-            });
-        }
+    if let Some(bundled) = bundled_tcc_path()
+        && bundled.is_file()
+    {
+        return Ok(DetectedCompiler {
+            binary: bundled,
+            supports_pedantic_flags: false, // tcc: never pass GCC-style pedantic flags
+        });
     }
 
     if let Some(path) = which("cc") {
