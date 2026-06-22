@@ -7,21 +7,6 @@ pub enum TypesCheck {
     Array(Box<TypesCheck>),
 }
 
-#[derive(Debug, Clone)]
-pub enum Types {
-    Scalar(Scalar),
-    String(String),
-    Array(Vec<Scalar>),
-    Void,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Scalar {
-    Boolean(bool),
-    Number(i64),
-    Float(f64),
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
     Void,

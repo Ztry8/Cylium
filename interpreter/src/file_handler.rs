@@ -51,11 +51,4 @@ impl FileHandler {
             )
         )
     }
-
-    pub fn show_warning(warning: &str) {
-        println!(
-            "Warning {}\nFor details, visit: https://cylium.site/materials/errors",
-            warning,
-        )
-    }
 }

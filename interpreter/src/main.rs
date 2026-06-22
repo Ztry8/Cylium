@@ -5,13 +5,12 @@
 use file_handler::FileHandler;
 use parser::Parser;
 
-mod bytecode;
+mod codegen;
+mod compiler;
 mod errors;
 mod file_handler;
-mod interpreter;
 mod lexer;
 mod parser;
-mod scope;
 mod types;
 mod validator;
 
@@ -33,7 +32,7 @@ fn main() {
         match file_name.as_str() {
             "help" => {
                 println!(
-                    "Cylium Interpreter {}\nhttps://cylium.site\n\nUsage:\n    cylium <file>\n    cylium <command>\n",
+                    "Cylium Compiler {}\nhttps://cylium.site\n\nUsage:\n    cylium <file> [-o <output>]\n    cylium <command>\n",
                     env!("CARGO_PKG_VERSION")
                 );
 
@@ -41,11 +40,13 @@ fn main() {
                     "Commands:\n    help    Show this help message\n    about   License, copyright and credits\n",
                 );
 
-                println!("Arguments:\n    <file>  Source file to execute\n",);
+                println!(
+                    "Arguments:\n    <file>      Source file to compile\n    -o <output> Output executable path (default: same name as <file>, without '.cyl')\n",
+                );
             }
             "about" => {
                 println!(
-                    "Cylium Interpreter {}\nhttps://cylium.site\n\nCopyright (c) 2026 Ztry8 (AslanD)\nAll rights reserved.\n",
+                    "Cylium Compiler {}\nhttps://cylium.site\n\nCopyright (c) 2026 Ztry8 (AslanD)\nAll rights reserved.\n",
                     env!("CARGO_PKG_VERSION")
                 );
 
@@ -73,9 +74,17 @@ fn main() {
 
                     validator::check_types(&handler, &mut ast);
 
-                    let (program, consts) = bytecode::compile(&handler, ast);
+                    let output_path = output_path_for(&file_name, &mut args);
 
-                    interpreter::execute(&handler, program, consts);
+                    match compiler::compile_and_build(&ast, &output_path) {
+                        Ok(built_path) => {
+                            println!("Compiled successfully: {}", built_path.display());
+                        }
+                        Err(e) => {
+                            println!("Error: {e}");
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 Err(_) => {
                     println!("Error: Specified file not found.");
@@ -84,5 +93,24 @@ fn main() {
         }
     } else {
         println!("Error: Expected 1 argument. Type 'help' for assistance");
+    }
+}
+
+fn output_path_for(file_name: &str, args: &mut std::env::Args) -> std::path::PathBuf {
+    let mut explicit_output = None;
+    while let Some(arg) = args.next() {
+        if arg == "-o" {
+            explicit_output = args.next();
+            break;
+        }
+    }
+
+    if let Some(out) = explicit_output {
+        return std::path::PathBuf::from(out);
+    }
+
+    match file_name.strip_suffix(".cyl") {
+        Some(stem) => std::path::PathBuf::from(stem),
+        None => std::path::PathBuf::from(format!("{file_name}.out")),
     }
 }

@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-pub const A02: &str = "A02: Cannot convert value to numeric type.";
 pub const A03: &str = "A03: Requested variable does not exist.";
 
 pub const A04: &str = "A04: Expected assignment operator '=' after variable name.";
@@ -14,10 +13,6 @@ pub const A10: &str = "A10: Unclosed bracket.";
 pub const A15: &str = "A15: Invalid expression.";
 pub const A16: &str = "A16: Invalid type for arithmetic operation.";
 
-// pub const A17: &str = "A17: Invalid vector index.";
-// pub const A18: &str = "A18: This operator can only be used with strings.";
-
-pub const A19: &str = "A19: Index out of bounds.";
 pub const A20: &str = "A20: Statements are only allowed inside functions.";
 
 pub const A21: &str = "A21: Unclosed string.";
@@ -33,7 +28,6 @@ pub const A29: &str = "A29: Expected variable name to delete.";
 // pub const A30: &str = "A30: This operator can only be used with vectors.";
 
 pub const A34: &str = "A34: Invalid number.";
-pub const A35: &str = "A35: Cannot convert value to logical type.";
 
 // pub const A36: &str = "A36: Cannot convert value to string type.";
 pub const A37: &str = "A37: Constant declared more than one time.";
@@ -47,15 +41,7 @@ pub const A40: &str = "A40: Variable is already of the target type.";
 pub const A42: &str = "A42: Arguments types do not match.";
 pub const A43: &str = "A43: Variable type do not match.";
 
-pub const A44: &str = "A44: Cannot divide a number by zero.";
-pub const A45: &str = "A45: Cannot root a negative number.";
-
 pub const A46: &str = "A46: Non-void function must always return a value.";
 pub const A47: &str = "A47: Function returns a void.";
 
 pub const A48: &str = "A48: Array cannot be empty.";
-
-//
-
-pub const C02: &str = "C02: Failed to read input.";
-pub const C03: &str = "C03: System time goes before the Unix epoch.";

@@ -11,17 +11,21 @@
   * [x] Implement `while` loop
   * [x] Implement `for` loop
 
-* [x] Replace procedures with functions 
-* [x] Add arrays 
-* [ ] Add structures
-* [ ] Add unions
-* [ ] Add references to variables
-* [ ] Add `include` and support multi-file scripts
+* [x] Extend the core language
+  * [x] Replace procedures with functions
+  * [x] Add arrays
 
-* [ ] Add compilation to WASM
-  * [ ] Foreign Function Interface (FFI)
-    * [ ] Rust integration
-    * [ ] C/C++ integration
+* [x] Replace the bytecode interpreter backend with AOT compilation to C
+
+* [ ] Add data structures
+  * [ ] Add structs
+  * [ ] Add unions
+  * [ ] Add references to variables
+  * [ ] Add `include` and support multi-file scripts
+
+* [ ] Foreign Function Interface (FFI)
+  * [ ] Rust integration
+  * [ ] C/C++ integration
 
 * [ ] Build the standard library
   * [ ] Math operations

@@ -3,7 +3,7 @@ name = "cylium"
 version = "0.4.1"
 authors = ["Ztry8 (AslanD)"] 
 edition = "2024"
-description = "Imperative, strongly typed scripting language"
+description = "Imperative, strongly typed compilated language"
 documentation = "https://cylium.site/docs"
 readme = "README.md"
 homepage = "https://cylium.site/"
@@ -14,7 +14,7 @@ keywords = [
   "scripting-language",
   "imperative",
   "strongly-typed",
-  "interpreted",
+  "compilated",
   "minimalistic",
   "manual-memory"
 ]
