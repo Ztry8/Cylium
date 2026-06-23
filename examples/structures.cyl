@@ -1,0 +1,29 @@
+# Structures in Cylium
+
+struct Point
+    float x
+    float y
+end
+
+func foo(Point n) -> Point
+    Point x = (n.y, n.x)
+    return x
+end
+
+func main() -> int 
+    Point a = (10.0, 12.5)
+    Point b = (
+        y: 1.0
+        x: 2.0
+    )
+
+    a.x += b.y
+    Point c = a
+
+    echo(a)
+    echo(b)
+    echo(c)
+    echo(foo(a))
+
+    return 0
+end

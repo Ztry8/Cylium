@@ -33,6 +33,7 @@ pub enum Token {
     End,    // end
     Return, // return
     Arrow,  // ->
+    Struct, // struct
 
     Plus,           // +
     Minus,          // -
@@ -77,6 +78,7 @@ pub enum Token {
     Comma,        // ,
     Colon,        // :
     Semicolon,    //;
+    Dot,          // .
 }
 
 pub fn tokenize_file(handler: &FileHandler) -> Vec<Vec<Token>> {
@@ -134,6 +136,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
                 continue;
             }
 
+            '.' => tokens.push(Token::Dot),
             '(' => tokens.push(Token::OpenParen),
             ')' => tokens.push(Token::CloseParen),
             '[' => tokens.push(Token::OpenBracket),
@@ -287,6 +290,7 @@ fn tokenize_line(line: &str) -> Result<Vec<Token>, String> {
 
                     i -= 1;
                     match ident.as_str() {
+                        "struct" => tokens.push(Token::Struct),
                         "true" => tokens.push(Token::BooleanValue(true)),
                         "false" => tokens.push(Token::BooleanValue(false)),
                         "as" => tokens.push(Token::As),

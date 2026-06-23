@@ -13,6 +13,7 @@ use crate::{
 };
 
 type Functions = HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)>;
+type Structs = HashMap<String, Vec<(String, TypesCheck)>>;
 
 pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     let mut consts = HashMap::new();
@@ -28,6 +29,7 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
     consts.insert("IS_ARM64".to_owned(), TypesCheck::Boolean);
 
     let mut funcs: HashMap<String, (Vec<(String, TypesCheck)>, ReturnType)> = HashMap::new();
+    let mut structs: Structs = HashMap::new();
 
     for node in ast.iter() {
         if let AstKind::Func {
@@ -41,6 +43,37 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
                 .is_some()
         {
             handler.show_error(node.line, errors::A38)
+        }
+
+        if let AstKind::StructDecl { name, fields } = &node.kind
+            && structs.insert(name.clone(), fields.clone()).is_some()
+        {
+            handler.show_error(node.line, errors::A38)
+        }
+    }
+
+    for node in ast.iter() {
+        if let AstKind::StructDecl { fields, .. } = &node.kind {
+            for (_, type_) in fields.iter() {
+                if let Err(e) = check_type_exists(&structs, type_) {
+                    handler.show_error(node.line, &e);
+                }
+            }
+        }
+
+        if let AstKind::Func {
+            args, return_type, ..
+        } = &node.kind
+        {
+            for (_, type_) in args.iter() {
+                if let Err(e) = check_type_exists(&structs, type_) {
+                    handler.show_error(node.line, &e);
+                }
+            }
+
+            if let Err(e) = check_return_type_exists(&structs, return_type) {
+                handler.show_error(node.line, &e);
+            }
         }
     }
 
@@ -57,6 +90,7 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
                     handler.show_error(node.line, errors::A37)
                 }
             }
+            AstKind::StructDecl { .. } => {}
             AstKind::Func {
                 body,
                 args,
@@ -70,9 +104,14 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
                 }
 
                 for node in body.iter_mut() {
-                    if let Err(e) =
-                        main_check(&funcs, &mut variables, &consts, &mut node.kind, return_type)
-                    {
+                    if let Err(e) = main_check(
+                        &funcs,
+                        &structs,
+                        &mut variables,
+                        &consts,
+                        &mut node.kind,
+                        return_type,
+                    ) {
                         handler.show_error(node.line, &e);
                     }
                 }
@@ -84,6 +123,34 @@ pub fn check_types(handler: &FileHandler, ast: &mut [AstNode]) {
 
             _ => unreachable!(),
         }
+    }
+}
+
+fn check_type_exists(structs: &Structs, type_: &TypesCheck) -> Result<(), String> {
+    match type_ {
+        TypesCheck::Struct(name) => {
+            if structs.contains_key(name) {
+                Ok(())
+            } else {
+                Err(errors::A24.to_owned())
+            }
+        }
+        TypesCheck::Array(inner) => check_type_exists(structs, inner),
+        _ => Ok(()),
+    }
+}
+
+fn check_return_type_exists(structs: &Structs, type_: &ReturnType) -> Result<(), String> {
+    match type_ {
+        ReturnType::Struct(name) => {
+            if structs.contains_key(name) {
+                Ok(())
+            } else {
+                Err(errors::A24.to_owned())
+            }
+        }
+        ReturnType::Array(inner) => check_return_type_exists(structs, inner),
+        _ => Ok(()),
     }
 }
 
@@ -110,8 +177,125 @@ fn always_returns(body: &[AstNode]) -> bool {
     false
 }
 
+fn return_type_to_types_check(type_: &ReturnType) -> TypesCheck {
+    match type_ {
+        ReturnType::Int => TypesCheck::Int,
+        ReturnType::Float => TypesCheck::Float,
+        ReturnType::String => TypesCheck::String,
+        ReturnType::Boolean => TypesCheck::Boolean,
+        ReturnType::Struct(name) => TypesCheck::Struct(name.clone()),
+        ReturnType::Array(inner) => TypesCheck::Array(Box::new(return_type_to_types_check(inner))),
+        ReturnType::Void => unreachable!(),
+    }
+}
+
+fn check_struct_literal(
+    structs: &Structs,
+    funcs: &Functions,
+    variables: &mut HashMap<String, (TypesCheck, bool)>,
+    consts: &HashMap<String, TypesCheck>,
+    struct_name: &str,
+    node: &mut AstKind,
+) -> Result<(), String> {
+    let fields = structs
+        .get(struct_name)
+        .ok_or_else(|| errors::A24.to_owned())?
+        .clone();
+
+    match node {
+        AstKind::StructShortLiteral { fields: values } => {
+            if values.len() != fields.len() {
+                return Err(errors::A27.to_owned());
+            }
+
+            for (value, (_, expected_type)) in values.iter_mut().zip(fields.iter()) {
+                check_value_against_type(structs, funcs, variables, consts, expected_type, value)?;
+            }
+
+            Ok(())
+        }
+        AstKind::StructLongLiteral { fields: values } => {
+            if values.len() != fields.len() {
+                return Err(errors::A27.to_owned());
+            }
+
+            let mut seen = Vec::new();
+
+            for (field_name, value) in values.iter_mut() {
+                if seen.contains(field_name) {
+                    return Err(errors::A37.to_owned());
+                }
+                seen.push(field_name.clone());
+
+                let expected_type = fields
+                    .iter()
+                    .find(|(n, _)| n == field_name)
+                    .map(|(_, t)| t.clone())
+                    .ok_or_else(|| errors::A24.to_owned())?;
+
+                check_value_against_type(structs, funcs, variables, consts, &expected_type, value)?;
+            }
+
+            Ok(())
+        }
+        _ => {
+            let t = expr_annotate(funcs, structs, variables, consts, node)?;
+            if t != TypesCheck::Struct(struct_name.to_owned()) {
+                return Err(errors::A43.to_owned());
+            }
+
+            Ok(())
+        }
+    }
+}
+
+fn check_value_against_type(
+    structs: &Structs,
+    funcs: &Functions,
+    variables: &mut HashMap<String, (TypesCheck, bool)>,
+    consts: &HashMap<String, TypesCheck>,
+    expected_type: &TypesCheck,
+    value: &mut AstKind,
+) -> Result<(), String> {
+    match expected_type {
+        TypesCheck::Struct(name) => {
+            check_struct_literal(structs, funcs, variables, consts, name, value)
+        }
+        _ => {
+            let t = expr_annotate(funcs, structs, variables, consts, value)?;
+            if t != *expected_type {
+                return Err(errors::A43.to_owned());
+            }
+
+            Ok(())
+        }
+    }
+}
+
+fn struct_field_type(
+    structs: &Structs,
+    var_type: &TypesCheck,
+    member: &str,
+) -> Result<TypesCheck, String> {
+    let struct_name = match var_type {
+        TypesCheck::Struct(name) => name,
+        _ => return Err(errors::A43.to_owned()),
+    };
+
+    let fields = structs
+        .get(struct_name)
+        .ok_or_else(|| errors::A24.to_owned())?;
+
+    fields
+        .iter()
+        .find(|(n, _)| n == member)
+        .map(|(_, t)| t.clone())
+        .ok_or_else(|| errors::A03.to_owned())
+}
+
 fn main_check(
     funcs: &Functions,
+    structs: &Structs,
     variables: &mut HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &mut AstKind,
@@ -124,25 +308,12 @@ fn main_check(
             }
         }
         AstKind::Return(Some(expr)) => {
-            let t = expr_annotate(funcs, variables, consts, expr)?;
-            let expected = match return_type {
-                ReturnType::Int => TypesCheck::Int,
-                ReturnType::Float => TypesCheck::Float,
-                ReturnType::String => TypesCheck::String,
-                ReturnType::Boolean => TypesCheck::Boolean,
-                ReturnType::Array(type_) => TypesCheck::Array(Box::new(match **type_ {
-                    ReturnType::String => TypesCheck::String,
-                    ReturnType::Boolean => TypesCheck::Boolean,
-                    ReturnType::Int => TypesCheck::Int,
-                    ReturnType::Float => TypesCheck::Float,
-                    _ => unreachable!(),
-                })),
-                ReturnType::Void => return Err(errors::A43.to_owned()),
-            };
-
-            if t != expected {
+            if *return_type == ReturnType::Void {
                 return Err(errors::A43.to_owned());
             }
+
+            let expected = return_type_to_types_check(return_type);
+            check_value_against_type(structs, funcs, variables, consts, &expected, expr)?;
         }
         AstKind::FuncCall { name, args } => {
             match name.as_str() {
@@ -158,7 +329,7 @@ fn main_check(
                         return Err(errors::A27.to_owned());
                     }
 
-                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    let t = expr_annotate(funcs, structs, variables, consts, &mut args[0])?;
                     if t != TypesCheck::Float {
                         return Err(errors::A42.to_owned());
                     }
@@ -170,7 +341,7 @@ fn main_check(
                         return Err(errors::A27.to_owned());
                     }
 
-                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    let t = expr_annotate(funcs, structs, variables, consts, &mut args[0])?;
                     if t != TypesCheck::String {
                         return Err(errors::A42.to_owned());
                     }
@@ -189,7 +360,7 @@ fn main_check(
                         return Err(errors::A27.to_owned());
                     }
 
-                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    let t = expr_annotate(funcs, structs, variables, consts, &mut args[0])?;
                     if t != TypesCheck::Int {
                         return Err(errors::A42.to_owned());
                     }
@@ -201,7 +372,7 @@ fn main_check(
                         return Err(errors::A27.to_owned());
                     }
 
-                    let t = expr_annotate(funcs, variables, consts, &mut args[0])?;
+                    let t = expr_annotate(funcs, structs, variables, consts, &mut args[0])?;
                     if !matches!(t, TypesCheck::Array(_)) {
                         return Err(errors::A42.to_owned());
                     }
@@ -216,11 +387,16 @@ fn main_check(
                     return Err(errors::A27.to_owned());
                 }
 
-                for (i, arg) in args.iter_mut().enumerate() {
-                    let t = expr_annotate(funcs, variables, consts, arg)?;
-                    if t != params[i].1 {
-                        return Err(errors::A42.to_owned());
-                    }
+                let params = params.clone();
+                for (arg, (_, expected_type)) in args.iter_mut().zip(params.iter()) {
+                    check_value_against_type(
+                        structs,
+                        funcs,
+                        variables,
+                        consts,
+                        expected_type,
+                        arg,
+                    )?;
                 }
             } else {
                 return Err(errors::A24.to_owned());
@@ -241,17 +417,13 @@ fn main_check(
             value,
             is_const,
         } => {
-            let real_type = expr_annotate(funcs, variables, consts, value)?;
+            check_value_against_type(structs, funcs, variables, consts, type_, value)?;
 
-            if *type_ == real_type {
-                if variables
-                    .insert(name.clone(), (type_.clone(), *is_const))
-                    .is_some()
-                {
-                    return Err(errors::A37.to_owned());
-                }
-            } else {
-                return Err(errors::A43.to_owned());
+            if variables
+                .insert(name.clone(), (type_.clone(), *is_const))
+                .is_some()
+            {
+                return Err(errors::A37.to_owned());
             }
         }
         AstKind::Assign {
@@ -263,63 +435,69 @@ fn main_check(
             if let Some((type_, is_const)) = variables.get(name) {
                 *var_type = type_.clone();
                 if !*is_const {
-                    let value = expr_annotate(funcs, variables, consts, expr)?;
+                    let var_type = var_type.clone();
 
                     match op {
                         Token::Assign => {
-                            if *var_type != value {
-                                return Err(errors::A43.to_owned());
+                            check_value_against_type(
+                                structs, funcs, variables, consts, &var_type, expr,
+                            )?;
+                        }
+                        _ => {
+                            let value = expr_annotate(funcs, structs, variables, consts, expr)?;
+
+                            match op {
+                                Token::PlusAssign => match (&var_type, &value) {
+                                    (TypesCheck::String, TypesCheck::String) => {}
+                                    (TypesCheck::String, TypesCheck::Int) => {}
+                                    (TypesCheck::String, TypesCheck::Float) => {}
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    (TypesCheck::Float, TypesCheck::Float) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::MinusAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    (TypesCheck::Float, TypesCheck::Float) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::MultiplyAssign => match (&var_type, &value) {
+                                    (TypesCheck::String, TypesCheck::Int) => {}
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    (TypesCheck::Float, TypesCheck::Float) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::DivideAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    (TypesCheck::Float, TypesCheck::Float) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::ModAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::BitAndAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::BitOrAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::BitXorAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::BitRightAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                Token::BitLeftAssign => match (&var_type, &value) {
+                                    (TypesCheck::Int, TypesCheck::Int) => {}
+                                    _ => return Err(errors::A16.to_owned()),
+                                },
+                                _ => unreachable!(),
                             }
                         }
-                        Token::PlusAssign => match (var_type, value) {
-                            (TypesCheck::String, TypesCheck::String) => {}
-                            (TypesCheck::String, TypesCheck::Int) => {}
-                            (TypesCheck::String, TypesCheck::Float) => {}
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            (TypesCheck::Float, TypesCheck::Float) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::MinusAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            (TypesCheck::Float, TypesCheck::Float) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::MultiplyAssign => match (var_type, value) {
-                            (TypesCheck::String, TypesCheck::Int) => {}
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            (TypesCheck::Float, TypesCheck::Float) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::DivideAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            (TypesCheck::Float, TypesCheck::Float) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::ModAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::BitAndAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::BitOrAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::BitXorAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::BitRightAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        Token::BitLeftAssign => match (var_type, value) {
-                            (TypesCheck::Int, TypesCheck::Int) => {}
-                            _ => return Err(errors::A16.to_owned()),
-                        },
-                        _ => unreachable!(),
                     }
                 } else {
                     return Err(errors::A07.to_owned());
@@ -347,71 +525,165 @@ fn main_check(
 
                 *elem_type = real_elem.clone();
 
-                let idx_type = expr_annotate(funcs, variables, consts, index)?;
+                let idx_type = expr_annotate(funcs, structs, variables, consts, index)?;
                 if idx_type != TypesCheck::Int {
                     return Err(errors::A16.to_owned());
                 }
 
-                let val_type = expr_annotate(funcs, variables, consts, expr)?;
+                match op {
+                    Token::Assign => {
+                        check_value_against_type(
+                            structs, funcs, variables, consts, &real_elem, expr,
+                        )?;
+                    }
+                    _ => {
+                        let val_type = expr_annotate(funcs, structs, variables, consts, expr)?;
+
+                        match op {
+                            Token::PlusAssign => match (&real_elem, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                (TypesCheck::String, TypesCheck::String) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::MinusAssign => match (&real_elem, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::MultiplyAssign => match (&real_elem, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::DivideAssign => match (&real_elem, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::ModAssign => match (&real_elem, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::BitAndAssign
+                            | Token::BitOrAssign
+                            | Token::BitXorAssign
+                            | Token::BitRightAssign
+                            | Token::BitLeftAssign => match (&real_elem, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            _ => return Err(errors::A15.to_owned()),
+                        }
+                    }
+                }
+            } else {
+                return Err(errors::A03.to_owned());
+            }
+        }
+        AstKind::StructSet {
+            name,
+            member,
+            expr,
+            op,
+            elem_type,
+        } => {
+            if let Some((type_, is_const)) = variables.get(name) {
+                if *is_const {
+                    return Err(errors::A07.to_owned());
+                }
+
+                let field_type = struct_field_type(structs, type_, member)?;
+                *elem_type = field_type.clone();
 
                 match op {
                     Token::Assign => {
-                        if val_type != real_elem {
-                            return Err(errors::A43.to_owned());
+                        check_value_against_type(
+                            structs,
+                            funcs,
+                            variables,
+                            consts,
+                            &field_type,
+                            expr,
+                        )?;
+                    }
+                    _ => {
+                        let val_type = expr_annotate(funcs, structs, variables, consts, expr)?;
+
+                        match op {
+                            Token::PlusAssign => match (&field_type, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                (TypesCheck::String, TypesCheck::String) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::MinusAssign => match (&field_type, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::MultiplyAssign => match (&field_type, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::DivideAssign => match (&field_type, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                (TypesCheck::Float, TypesCheck::Float) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::ModAssign => match (&field_type, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            Token::BitAndAssign
+                            | Token::BitOrAssign
+                            | Token::BitXorAssign
+                            | Token::BitRightAssign
+                            | Token::BitLeftAssign => match (&field_type, &val_type) {
+                                (TypesCheck::Int, TypesCheck::Int) => {}
+                                _ => return Err(errors::A16.to_owned()),
+                            },
+                            _ => return Err(errors::A15.to_owned()),
                         }
                     }
-                    Token::PlusAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Int, TypesCheck::Int) => {}
-                        (TypesCheck::Float, TypesCheck::Float) => {}
-                        (TypesCheck::String, TypesCheck::String) => {}
-                        _ => return Err(errors::A16.to_owned()),
-                    },
-                    Token::MinusAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Int, TypesCheck::Int) => {}
-                        (TypesCheck::Float, TypesCheck::Float) => {}
-                        _ => return Err(errors::A16.to_owned()),
-                    },
-                    Token::MultiplyAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Int, TypesCheck::Int) => {}
-                        (TypesCheck::Float, TypesCheck::Float) => {}
-                        _ => return Err(errors::A16.to_owned()),
-                    },
-                    Token::DivideAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Int, TypesCheck::Int) => {}
-                        (TypesCheck::Float, TypesCheck::Float) => {}
-                        _ => return Err(errors::A16.to_owned()),
-                    },
-                    Token::ModAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Int, TypesCheck::Int) => {}
-                        _ => return Err(errors::A16.to_owned()),
-                    },
-                    Token::BitAndAssign
-                    | Token::BitOrAssign
-                    | Token::BitXorAssign
-                    | Token::BitRightAssign
-                    | Token::BitLeftAssign => match (&real_elem, &val_type) {
-                        (TypesCheck::Int, TypesCheck::Int) => {}
-                        _ => return Err(errors::A16.to_owned()),
-                    },
-                    _ => return Err(errors::A15.to_owned()),
                 }
             } else {
                 return Err(errors::A03.to_owned());
             }
         }
         AstKind::Condition { expr, yes, no } => {
-            if expr_annotate(funcs, variables, consts, expr)? == TypesCheck::Boolean {
+            if expr_annotate(funcs, structs, variables, consts, expr)? == TypesCheck::Boolean {
                 for node in yes.iter_mut() {
-                    main_check(funcs, variables, consts, &mut node.kind, return_type)?
+                    main_check(
+                        funcs,
+                        structs,
+                        variables,
+                        consts,
+                        &mut node.kind,
+                        return_type,
+                    )?
                 }
 
                 match no {
-                    Some(ElseBlock::ElseIf(node)) => {
-                        main_check(funcs, variables, consts, &mut node.kind, return_type)?
-                    }
+                    Some(ElseBlock::ElseIf(node)) => main_check(
+                        funcs,
+                        structs,
+                        variables,
+                        consts,
+                        &mut node.kind,
+                        return_type,
+                    )?,
                     Some(ElseBlock::Else(nodes)) => {
                         for node in nodes.iter_mut() {
-                            main_check(funcs, variables, consts, &mut node.kind, return_type)?
+                            main_check(
+                                funcs,
+                                structs,
+                                variables,
+                                consts,
+                                &mut node.kind,
+                                return_type,
+                            )?
                         }
                     }
                     None => {}
@@ -421,9 +693,16 @@ fn main_check(
             }
         }
         AstKind::While { expr, body } => {
-            if expr_annotate(funcs, variables, consts, expr)? == TypesCheck::Boolean {
+            if expr_annotate(funcs, structs, variables, consts, expr)? == TypesCheck::Boolean {
                 for node in body.iter_mut() {
-                    main_check(funcs, variables, consts, &mut node.kind, return_type)?
+                    main_check(
+                        funcs,
+                        structs,
+                        variables,
+                        consts,
+                        &mut node.kind,
+                        return_type,
+                    )?
                 }
             } else {
                 return Err(errors::A15.to_owned());
@@ -436,14 +715,14 @@ fn main_check(
             step,
             body,
         } => {
-            let start_type = expr_annotate(funcs, variables, consts, start)?;
+            let start_type = expr_annotate(funcs, structs, variables, consts, start)?;
 
             if !matches!(start_type, TypesCheck::Int) {
                 return Err(errors::A15.to_owned());
             }
 
             if !matches!(
-                expr_annotate(funcs, variables, consts, end)?,
+                expr_annotate(funcs, structs, variables, consts, end)?,
                 TypesCheck::Int
             ) {
                 return Err(errors::A15.to_owned());
@@ -451,7 +730,7 @@ fn main_check(
 
             if let Some(step) = step.as_mut()
                 && !matches!(
-                    expr_annotate(funcs, variables, consts, step)?,
+                    expr_annotate(funcs, structs, variables, consts, step)?,
                     TypesCheck::Int
                 )
             {
@@ -461,11 +740,18 @@ fn main_check(
             variables.insert(var_name.clone(), (start_type, false));
 
             for node in body.iter_mut() {
-                main_check(funcs, variables, consts, &mut node.kind, return_type)?
+                main_check(
+                    funcs,
+                    structs,
+                    variables,
+                    consts,
+                    &mut node.kind,
+                    return_type,
+                )?
             }
         }
         AstKind::Echo(expr) => {
-            expr_annotate(funcs, variables, consts, expr)?;
+            expr_annotate(funcs, structs, variables, consts, expr)?;
         }
         _ => {}
     }
@@ -475,6 +761,7 @@ fn main_check(
 
 fn expr_annotate(
     funcs: &Functions,
+    structs: &Structs,
     variables: &HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &mut AstKind,
@@ -483,38 +770,39 @@ fn expr_annotate(
         AstKind::UnaryOp {
             expr, expr_type, ..
         } => {
-            let t = expr_annotate(funcs, variables, consts, expr)?;
+            let t = expr_annotate(funcs, structs, variables, consts, expr)?;
             *expr_type = t;
-            expr_check(funcs, variables, consts, node)
+            expr_check(funcs, structs, variables, consts, node)
         }
         AstKind::AsOp { expr, src_type, .. } => {
-            let t = expr_annotate(funcs, variables, consts, expr)?;
+            let t = expr_annotate(funcs, structs, variables, consts, expr)?;
             *src_type = t;
-            expr_check(funcs, variables, consts, node)
+            expr_check(funcs, structs, variables, consts, node)
         }
         AstKind::FuncCall { args, .. } => {
             for arg in args.iter_mut() {
-                expr_annotate(funcs, variables, consts, arg)?;
+                expr_annotate(funcs, structs, variables, consts, arg)?;
             }
 
-            expr_check(funcs, variables, consts, node)
+            expr_check(funcs, structs, variables, consts, node)
         }
-        AstKind::Ident(_) => expr_check(funcs, variables, consts, node),
+        AstKind::Ident(_) => expr_check(funcs, structs, variables, consts, node),
         AstKind::ArrayLiteral { values } => {
             for v in values.iter_mut() {
-                expr_annotate(funcs, variables, consts, v)?;
+                expr_annotate(funcs, structs, variables, consts, v)?;
             }
-            expr_check(funcs, variables, consts, node)
+            expr_check(funcs, structs, variables, consts, node)
         }
         AstKind::ArrayFill { size, value } => {
-            expr_annotate(funcs, variables, consts, size)?;
-            expr_annotate(funcs, variables, consts, value)?;
-            expr_check(funcs, variables, consts, node)
+            expr_annotate(funcs, structs, variables, consts, size)?;
+            expr_annotate(funcs, structs, variables, consts, value)?;
+            expr_check(funcs, structs, variables, consts, node)
         }
         AstKind::ArrayGet { index, .. } => {
-            expr_annotate(funcs, variables, consts, index)?;
-            expr_check(funcs, variables, consts, node)
+            expr_annotate(funcs, structs, variables, consts, index)?;
+            expr_check(funcs, structs, variables, consts, node)
         }
+        AstKind::StructGet { .. } => expr_check(funcs, structs, variables, consts, node),
         AstKind::BinaryOp {
             left,
             right,
@@ -522,18 +810,19 @@ fn expr_annotate(
             right_type,
             ..
         } => {
-            let lt = expr_annotate(funcs, variables, consts, left)?;
-            let rt = expr_annotate(funcs, variables, consts, right)?;
+            let lt = expr_annotate(funcs, structs, variables, consts, left)?;
+            let rt = expr_annotate(funcs, structs, variables, consts, right)?;
             *left_type = lt;
             *right_type = rt;
-            expr_check(funcs, variables, consts, node)
+            expr_check(funcs, structs, variables, consts, node)
         }
-        _ => expr_check(funcs, variables, consts, node),
+        _ => expr_check(funcs, structs, variables, consts, node),
     }
 }
 
 fn expr_check(
     funcs: &Functions,
+    structs: &Structs,
     variables: &HashMap<String, (TypesCheck, bool)>,
     consts: &HashMap<String, TypesCheck>,
     node: &AstKind,
@@ -557,9 +846,9 @@ fn expr_check(
                 return Err(errors::A48.to_owned());
             }
 
-            let first = expr_check(funcs, variables, consts, &values[0])?;
+            let first = expr_check(funcs, structs, variables, consts, &values[0])?;
             for v in &values[1..] {
-                if expr_check(funcs, variables, consts, v)? != first {
+                if expr_check(funcs, structs, variables, consts, v)? != first {
                     return Err(errors::A43.to_owned());
                 }
             }
@@ -567,17 +856,17 @@ fn expr_check(
             Ok(TypesCheck::Array(Box::new(first)))
         }
         AstKind::ArrayFill { size, value } => {
-            let size_type = expr_check(funcs, variables, consts, size)?;
+            let size_type = expr_check(funcs, structs, variables, consts, size)?;
             if size_type != TypesCheck::Int {
                 return Err(errors::A16.to_owned());
             }
 
-            let elem = expr_check(funcs, variables, consts, value)?;
+            let elem = expr_check(funcs, structs, variables, consts, value)?;
 
             Ok(TypesCheck::Array(Box::new(elem)))
         }
         AstKind::ArrayGet { name, index } => {
-            let idx_type = expr_check(funcs, variables, consts, index)?;
+            let idx_type = expr_check(funcs, structs, variables, consts, index)?;
             if idx_type != TypesCheck::Int {
                 return Err(errors::A16.to_owned());
             }
@@ -595,6 +884,17 @@ fn expr_check(
                 _ => Err(errors::A43.to_owned()),
             }
         }
+        AstKind::StructGet { name, index } => {
+            let var_type = if let Some((t, _)) = variables.get(name) {
+                t.clone()
+            } else if let Some(t) = consts.get(name) {
+                t.clone()
+            } else {
+                return Err(errors::A03.to_owned());
+            };
+
+            struct_field_type(structs, &var_type, index)
+        }
         AstKind::FuncCall { name, args } => {
             let argc = args.len();
 
@@ -607,7 +907,7 @@ fn expr_check(
                 }
                 "sin" | "cos" | "sqrt" => {
                     return match argc {
-                        1 => match expr_check(funcs, variables, consts, &args[0])? {
+                        1 => match expr_check(funcs, structs, variables, consts, &args[0])? {
                             TypesCheck::Float => Ok(TypesCheck::Float),
                             _ => Err(errors::A42.to_owned()),
                         },
@@ -616,7 +916,7 @@ fn expr_check(
                 }
                 "shell" => {
                     return match argc {
-                        1 => match expr_check(funcs, variables, consts, &args[0])? {
+                        1 => match expr_check(funcs, structs, variables, consts, &args[0])? {
                             TypesCheck::String => Ok(TypesCheck::Int),
                             _ => Err(errors::A42.to_owned()),
                         },
@@ -625,7 +925,7 @@ fn expr_check(
                 }
                 "len" => {
                     return match argc {
-                        1 => match expr_check(funcs, variables, consts, &args[0])? {
+                        1 => match expr_check(funcs, structs, variables, consts, &args[0])? {
                             TypesCheck::Array(_) => Ok(TypesCheck::Int),
                             _ => Err(errors::A42.to_owned()),
                         },
@@ -644,25 +944,15 @@ fn expr_check(
 
             if let Some((_, ret)) = funcs.get(name) {
                 match ret {
-                    ReturnType::Int => Ok(TypesCheck::Int),
-                    ReturnType::Float => Ok(TypesCheck::Float),
-                    ReturnType::String => Ok(TypesCheck::String),
-                    ReturnType::Boolean => Ok(TypesCheck::Boolean),
-                    ReturnType::Array(type_) => Ok(TypesCheck::Array(Box::new(match **type_ {
-                        ReturnType::String => TypesCheck::String,
-                        ReturnType::Boolean => TypesCheck::Boolean,
-                        ReturnType::Int => TypesCheck::Int,
-                        ReturnType::Float => TypesCheck::Float,
-                        _ => unreachable!(),
-                    }))),
                     ReturnType::Void => Err(errors::A47.to_owned()),
+                    _ => Ok(return_type_to_types_check(ret)),
                 }
             } else {
                 Err(errors::A24.to_owned())
             }
         }
         AstKind::UnaryOp { op, expr, .. } => {
-            let value = expr_check(funcs, variables, consts, expr)?;
+            let value = expr_check(funcs, structs, variables, consts, expr)?;
 
             match op {
                 Token::Not => match value {
@@ -682,7 +972,7 @@ fn expr_check(
             }
         }
         AstKind::AsOp { expr, op, .. } => {
-            let value = expr_check(funcs, variables, consts, expr)?;
+            let value = expr_check(funcs, structs, variables, consts, expr)?;
 
             match op {
                 Cast::String => match value {
@@ -706,8 +996,8 @@ fn expr_check(
         AstKind::BinaryOp {
             left, op, right, ..
         } => {
-            let left = expr_check(funcs, variables, consts, left)?;
-            let right = expr_check(funcs, variables, consts, right)?;
+            let left = expr_check(funcs, structs, variables, consts, left)?;
+            let right = expr_check(funcs, structs, variables, consts, right)?;
 
             match op {
                 Token::Or => match (left, right) {

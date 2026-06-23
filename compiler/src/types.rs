@@ -4,6 +4,7 @@ pub enum TypesCheck {
     Boolean,
     Int,
     Float,
+    Struct(String),
     Array(Box<TypesCheck>),
 }
 
@@ -14,5 +15,6 @@ pub enum ReturnType {
     Boolean,
     Int,
     Float,
+    Struct(String),
     Array(Box<ReturnType>),
 }

@@ -112,6 +112,27 @@ pub enum AstKind {
         name: String,
         index: Box<AstKind>,
     },
+    StructDecl {
+        name: String,
+        fields: Vec<(String, TypesCheck)>,
+    },
+    StructShortLiteral {
+        fields: Vec<AstKind>,
+    },
+    StructLongLiteral {
+        fields: Vec<(String, Box<AstKind>)>,
+    },
+    StructSet {
+        name: String,
+        member: String,
+        op: Token,
+        expr: Box<AstKind>,
+        elem_type: TypesCheck,
+    },
+    StructGet {
+        name: String,
+        index: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +183,12 @@ impl Parser {
             .and_then(|line| line.get(self.pos))
     }
 
+    fn peek_token(&self, offset: usize) -> Option<&Token> {
+        self.tokens
+            .get(self.line)
+            .and_then(|line| line.get(self.pos + offset))
+    }
+
     fn next_line(&mut self) {
         self.line += 1;
         self.pos = 0;
@@ -170,12 +197,171 @@ impl Parser {
     fn parse(&mut self) -> Result<AstNode, String> {
         match self.current_token() {
             Some(Token::Func) => self.parse_func(),
+            Some(Token::Struct) => self.parse_struct_decl(),
             Some(Token::Const) => {
                 let result = self.parse_var();
                 self.next_line();
                 result
             }
             _ => Err(errors::A20.to_owned()),
+        }
+    }
+
+    fn parse_type(&mut self) -> Result<TypesCheck, String> {
+        let mut type_ = match self.current_token().cloned() {
+            Some(Token::Int) => TypesCheck::Int,
+            Some(Token::Float) => TypesCheck::Float,
+            Some(Token::String) => TypesCheck::String,
+            Some(Token::Bool) => TypesCheck::Boolean,
+            Some(Token::Ident(name)) => TypesCheck::Struct(name),
+            _ => return Err(errors::A15.to_owned()),
+        };
+
+        self.pos += 1;
+        if self.current_token() == Some(&Token::OpenBracket) {
+            self.pos += 1;
+            if self.current_token() != Some(&Token::CloseBracket) {
+                return Err(errors::A15.to_owned());
+            }
+            self.pos += 1;
+            type_ = TypesCheck::Array(Box::new(type_));
+        }
+
+        Ok(type_)
+    }
+
+    fn parse_return_type(&mut self) -> Result<ReturnType, String> {
+        let mut type_ = match self.current_token().cloned() {
+            Some(Token::Void) => ReturnType::Void,
+            Some(Token::Int) => ReturnType::Int,
+            Some(Token::Float) => ReturnType::Float,
+            Some(Token::String) => ReturnType::String,
+            Some(Token::Bool) => ReturnType::Boolean,
+            Some(Token::Ident(name)) => ReturnType::Struct(name),
+            _ => return Err(errors::A15.to_owned()),
+        };
+
+        self.pos += 1;
+        if self.current_token() == Some(&Token::OpenBracket) {
+            self.pos += 1;
+            if self.current_token() != Some(&Token::CloseBracket) {
+                return Err(errors::A15.to_owned());
+            }
+            self.pos += 1;
+            type_ = ReturnType::Array(Box::new(type_));
+        }
+
+        Ok(type_)
+    }
+
+    fn is_struct_decl_lookahead(&self) -> bool {
+        if !matches!(self.current_token(), Some(Token::Ident(_))) {
+            return false;
+        }
+
+        matches!(self.peek_token(1), Some(Token::Ident(_)))
+            || (matches!(self.peek_token(1), Some(Token::OpenBracket))
+                && matches!(self.peek_token(2), Some(Token::CloseBracket))
+                && matches!(self.peek_token(3), Some(Token::Ident(_))))
+    }
+
+    fn parse_struct_decl(&mut self) -> Result<AstNode, String> {
+        let struct_line = self.line;
+        self.pos += 1;
+
+        let name = if let Some(Token::Ident(n)) = self.current_token().cloned() {
+            self.pos += 1;
+            n
+        } else {
+            return Err(errors::A15.to_owned());
+        };
+
+        let mut fields = Vec::new();
+
+        self.next_line();
+        while self.current_token().cloned() != Some(Token::End) {
+            let type_ = self.parse_type()?;
+
+            let field_name = if let Some(Token::Ident(n)) = self.current_token().cloned() {
+                self.pos += 1;
+                n
+            } else {
+                return Err(errors::A15.to_owned());
+            };
+
+            fields.push((field_name, type_));
+            self.next_line();
+        }
+        self.next_line();
+
+        Ok(node!(struct_line, AstKind::StructDecl { name, fields }))
+    }
+
+    fn parse_struct_literal(&mut self) -> Result<AstKind, String> {
+        if self.current_token() != Some(&Token::OpenParen) {
+            return Err(errors::A15.to_owned());
+        }
+        self.pos += 1;
+
+        let is_multiline_long = self.current_token().is_none();
+        if is_multiline_long {
+            self.next_line();
+        }
+
+        let is_long = is_multiline_long
+            || (matches!(self.current_token(), Some(Token::Ident(_)))
+                && matches!(self.peek_token(1), Some(Token::Colon)));
+
+        if is_long {
+            let mut fields = Vec::new();
+
+            loop {
+                if self.current_token() == Some(&Token::CloseParen) {
+                    break;
+                }
+
+                let field_name = if let Some(Token::Ident(n)) = self.current_token().cloned() {
+                    self.pos += 1;
+                    n
+                } else {
+                    return Err(errors::A15.to_owned());
+                };
+
+                if self.current_token() != Some(&Token::Colon) {
+                    return Err(errors::A15.to_owned());
+                }
+                self.pos += 1;
+
+                let value = self.parse_value()?;
+                fields.push((field_name, Box::new(value)));
+
+                if self.current_token() == Some(&Token::CloseParen) {
+                    break;
+                }
+
+                self.next_line();
+            }
+
+            self.pos += 1;
+            Ok(AstKind::StructLongLiteral { fields })
+        } else {
+            let mut fields = Vec::new();
+
+            if self.current_token() != Some(&Token::CloseParen) {
+                fields.push(self.parse_value()?);
+
+                while self.current_token() == Some(&Token::Comma) {
+                    self.pos += 1;
+                    fields.push(self.parse_value()?);
+                }
+            }
+
+            if self.current_token() != Some(&Token::CloseParen) {
+                return Err(errors::A10.to_owned());
+            }
+            self.pos += 1;
+
+            Ok(AstKind::StructShortLiteral { fields })
         }
     }
 
@@ -217,27 +403,11 @@ impl Parser {
             self.pos += 1;
         }
 
-        let type_ = match self.current_token() {
-            Some(Token::Int) => TypesCheck::Int,
-            Some(Token::Float) => TypesCheck::Float,
-            Some(Token::String) => TypesCheck::String,
-            Some(Token::Bool) => TypesCheck::Boolean,
-            _ => return Err(errors::A15.to_owned()),
-        };
+        let type_ = self.parse_type()?;
 
-        let mut array = false;
-
-        self.pos += 1;
-        if self.current_token() == Some(&Token::OpenBracket) {
-            self.pos += 1;
-
-            if self.current_token() == Some(&Token::CloseBracket) {
-                array = true;
-                self.pos += 1;
-            } else {
-                return Err(errors::A15.to_owned());
-            }
-        }
+        let array = matches!(type_, TypesCheck::Array(_));
+        let is_struct = matches!(type_, TypesCheck::Struct(_))
+            || matches!(&type_, TypesCheck::Array(inner) if matches!(**inner, TypesCheck::Struct(_)));
 
         if let Some(Token::Ident(name)) = self.current_token().cloned() {
             self.pos += 1;
@@ -253,16 +423,16 @@ impl Parser {
                     self.line,
                     AstKind::VarDecl {
                         name,
-                        type_: if array {
-                            TypesCheck::Array(Box::new(type_))
-                        } else {
-                            type_
-                        },
-                        value: Box::new(if array && let Ok(val) = self.parse_array() {
-                            val
-                        } else {
-                            self.parse_value()?
-                        }),
+                        type_,
+                        value: Box::new(
+                            if array && self.current_token() == Some(&Token::OpenBracket) {
+                                self.parse_array()?
+                            } else if is_struct && self.current_token() == Some(&Token::OpenParen) {
+                                self.parse_struct_literal()?
+                            } else {
+                                self.parse_value()?
+                            }
+                        ),
                         is_const,
                     }
                 ))
@@ -275,7 +445,11 @@ impl Parser {
     }
 
     pub fn parse_value(&mut self) -> Result<AstKind, String> {
-        self.parse_expr(0)
+        if self.current_token() == Some(&Token::OpenBracket) {
+            self.parse_array()
+        } else {
+            self.parse_expr(0)
+        }
     }
 
     fn parse_expr(&mut self, min_prec: u8) -> Result<AstKind, String> {
@@ -320,6 +494,19 @@ impl Parser {
                     AstKind::ArrayGet {
                         name,
                         index: Box::new(index),
+                    }
+                } else if self.current_token() == Some(&Token::Dot) {
+                    self.pos += 1;
+                    let member = if let Some(Token::Ident(m)) = self.current_token().cloned() {
+                        self.pos += 1;
+                        m
+                    } else {
+                        return Err(errors::A15.to_owned());
+                    };
+
+                    AstKind::StructGet {
+                        name,
+                        index: member,
                     }
                 } else {
                     AstKind::Ident(name)
@@ -445,23 +632,7 @@ impl Parser {
         let mut args = Vec::new();
 
         while self.current_token() != Some(&Token::CloseParen) {
-            let mut type_ = match self.current_token() {
-                Some(Token::Int) => TypesCheck::Int,
-                Some(Token::Float) => TypesCheck::Float,
-                Some(Token::String) => TypesCheck::String,
-                Some(Token::Bool) => TypesCheck::Boolean,
-                _ => return Err(errors::A15.to_owned()),
-            };
-
-            self.pos += 1;
-            if self.current_token() == Some(&Token::OpenBracket) {
-                self.pos += 1;
-                if self.current_token() != Some(&Token::CloseBracket) {
-                    return Err(errors::A15.to_owned());
-                }
-                self.pos += 1;
-                type_ = TypesCheck::Array(Box::new(type_));
-            }
+            let type_ = self.parse_type()?;
 
             let arg = if let Some(Token::Ident(a)) = self.current_token().cloned() {
                 self.pos += 1;
@@ -486,24 +657,7 @@ impl Parser {
         }
         self.pos += 1;
 
-        let mut return_type = match self.current_token() {
-            Some(Token::Void) => ReturnType::Void,
-            Some(Token::Int) => ReturnType::Int,
-            Some(Token::Float) => ReturnType::Float,
-            Some(Token::String) => ReturnType::String,
-            Some(Token::Bool) => ReturnType::Boolean,
-            _ => return Err(errors::A15.to_owned()),
-        };
-
-        self.pos += 1;
-        if self.current_token() == Some(&Token::OpenBracket) {
-            self.pos += 1;
-            if self.current_token() != Some(&Token::CloseBracket) {
-                return Err(errors::A15.to_owned());
-            }
-            self.pos += 1;
-            return_type = ReturnType::Array(Box::new(return_type));
-        }
+        let return_type = self.parse_return_type()?;
 
         let mut body = Vec::new();
         self.next_line();
@@ -759,6 +913,7 @@ impl Parser {
                     _ => Err(errors::A15.to_owned()),
                 }
             }
+            Some(Token::Ident(_)) if self.is_struct_decl_lookahead() => self.parse_var(),
             Some(Token::Ident(receiver)) => {
                 let mut next = self
                     .tokens
@@ -767,6 +922,7 @@ impl Parser {
                     .cloned();
 
                 let mut index = None;
+                let mut member = None;
                 if next == Some(Token::OpenBracket) {
                     self.pos += 2;
 
@@ -776,6 +932,18 @@ impl Parser {
                     }
 
                     self.pos += 1;
+                    next = self.current_token().cloned();
+                    self.pos -= 1;
+                } else if next == Some(Token::Dot) {
+                    self.pos += 2;
+
+                    member = if let Some(Token::Ident(m)) = self.current_token().cloned() {
+                        self.pos += 1;
+                        Some(m)
+                    } else {
+                        return Err(errors::A15.to_owned());
+                    };
+
                     next = self.current_token().cloned();
                     self.pos -= 1;
                 }
@@ -806,6 +974,14 @@ impl Parser {
                                 AstKind::ArraySet {
                                     name: receiver,
                                     index: Box::new(index),
+                                    op,
+                                    expr: Box::new(expr),
+                                    elem_type: TypesCheck::Int,
+                                }
+                            } else if let Some(member) = member {
+                                AstKind::StructSet {
+                                    name: receiver,
+                                    member,
                                     op,
                                     expr: Box::new(expr),
                                     elem_type: TypesCheck::Int,

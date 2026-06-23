@@ -18,7 +18,7 @@
 * [x] Replace the bytecode interpreter backend with AOT compilation to C
 
 * [ ] Add data structures
-  * [ ] Add structs
+  * [x] Add structs
   * [ ] Add unions
   * [ ] Add references to variables
   * [ ] Add `include` and support multi-file scripts
